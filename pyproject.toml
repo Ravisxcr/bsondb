@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "custom_bson"
+version = "0.1.0"
+description = "Embedded, file-backed document database with a PyMongo-like local API, built on a native BSON engine."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools]
+package-dir = { "" = "python" }
+packages = ["custom_bson"]
+
+[tool.setuptools.package-data]
+custom_bson = ["py.typed"]

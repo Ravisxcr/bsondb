@@ -53,3 +53,23 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+
+# CMake
+cmake-build*/
+CMakeFiles/
+CMakeCache.txt
+
+# Claude Code local notes (personal/local, not shared)
+CLAUDE.local.md
+
