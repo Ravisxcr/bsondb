@@ -1,0 +1,59 @@
+version: '3'
+
+vars:
+  VENV_DIR: .venv
+  # Use OS-specific paths for the virtual environment executables
+  PYTHON: '{{if eq .OS "windows"}}{{.VENV_DIR}}\Scripts\python{{else}}{{.VENV_DIR}}/bin/python{{end}}'
+
+tasks:
+  default:
+    desc: List all available tasks
+    cmds:
+      - task --list
+
+  venv:
+    desc: Create the virtual environment if it doesn't exist
+    cmds:
+      - python3 -m venv {{.VENV_DIR}}
+    status:
+      - test -d {{.VENV_DIR}}
+
+  install:
+    desc: Install the package and development dependencies in editable mode
+    deps: [venv]
+    cmds:
+      - '{{.PYTHON}} -m pip install -e ".[dev]"'
+
+  test-py:
+    desc: Run the Python test suite
+    deps: [venv]
+    cmds:
+      - '{{.PYTHON}} -m pytest tests/python_tests/ -v'
+
+  build-c:
+    desc: Build the standalone C engine and C smoke tests
+    cmds:
+      - cmake -S . -B build -DBUILD_TESTING=ON
+      - cmake --build build
+
+  test-c:
+    desc: Run the native C smoke test executables
+    deps: [build-c]
+    cmds:
+      - ctest --test-dir build --output-on-failure
+
+  test:
+    desc: Run all tests (Python and C)
+    deps: [test-py, test-c]
+
+  clean:
+    desc: Clean up build artifacts (does not delete .venv)
+    cmds:
+      - cmake -E rm -rf build
+      - cmake -E rm -rf .pytest_cache
+      - cmake -E rm -rf custom_bson.egg-info
+
+  clean-venv:
+    desc: Completely remove the virtual environment
+    cmds:
+      - cmake -E rm -rf {{.VENV_DIR}}
