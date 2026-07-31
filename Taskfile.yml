@@ -2,10 +2,6 @@ version: '3'
 
 vars:
   VENV_DIR: .venv
-  # The system python executable to use for bootstrapping the venv
-  SYS_PYTHON: '{{if eq .OS "windows"}}python{{else}}python3{{end}}'
-  # Use OS-specific paths for the virtual environment executables
-  PYTHON: '{{if eq .OS "windows"}}{{.VENV_DIR}}\Scripts\python{{else}}{{.VENV_DIR}}/bin/python{{end}}'
 
 tasks:
   default:
@@ -16,7 +12,10 @@ tasks:
   venv:
     desc: Create the virtual environment if it doesn't exist
     cmds:
-      - '{{.SYS_PYTHON}} -m venv {{.VENV_DIR}}'
+      - cmd: python -m venv {{.VENV_DIR}}
+        platforms: [windows]
+      - cmd: python3 -m venv {{.VENV_DIR}}
+        platforms: [linux, darwin]
     status:
       - test -d {{.VENV_DIR}}
 
@@ -24,13 +23,19 @@ tasks:
     desc: Install the package and development dependencies in editable mode
     deps: [venv]
     cmds:
-      - '{{.PYTHON}} -m pip install -e ".[dev]"'
+      - cmd: '{{.VENV_DIR}}/Scripts/python -m pip install -e ".[dev]"'
+        platforms: [windows]
+      - cmd: '{{.VENV_DIR}}/bin/python -m pip install -e ".[dev]"'
+        platforms: [linux, darwin]
 
   test-py:
     desc: Run the Python test suite
     deps: [venv]
     cmds:
-      - '{{.PYTHON}} -m pytest tests/python_tests/ -v'
+      - cmd: '{{.VENV_DIR}}/Scripts/python -m pytest tests/python_tests/ -v'
+        platforms: [windows]
+      - cmd: '{{.VENV_DIR}}/bin/python -m pytest tests/python_tests/ -v'
+        platforms: [linux, darwin]
 
   build-c:
     desc: Build the standalone C engine and C smoke tests
