@@ -1,5 +1,9 @@
 # bsondb
 
+[![PyPI version](https://img.shields.io/pypi/v/bsondb.svg)](https://pypi.org/project/bsondb/)
+[![Python versions](https://img.shields.io/pypi/pyversions/bsondb.svg)](https://pypi.org/project/bsondb/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Ravisxcr/bsondb/blob/main/LICENSE)
+
 An embedded, file-backed document database for Python with a
 [PyMongo](https://pymongo.readthedocs.io/)-like local API
 (`BsonDBClient`, `Database`, `Collection`, `ObjectId`), built on a
