@@ -8,14 +8,11 @@
  * unique-index duplicate rejection.
  */
 #include "custom_bson/btree.h"
+#include "test_common.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-
-static const char *TEST_PATH = "/tmp/custom_bson_test_btree.bidx";
-static const char *UNIQUE_PATH = "/tmp/custom_bson_test_btree_unique.bidx";
 
 static void key_int(uint8_t out[BSON_BTREE_KEY_SIZE], int64_t v) {
     memset(out, 0, BSON_BTREE_KEY_SIZE);
@@ -24,8 +21,11 @@ static void key_int(uint8_t out[BSON_BTREE_KEY_SIZE], int64_t v) {
 }
 
 int main(void) {
-    unlink(TEST_PATH);
-    unlink(UNIQUE_PATH);
+    char TEST_PATH[512], UNIQUE_PATH[512];
+    test_tmp_path(TEST_PATH, sizeof(TEST_PATH), "custom_bson_test_btree.bidx");
+    test_tmp_path(UNIQUE_PATH, sizeof(UNIQUE_PATH), "custom_bson_test_btree_unique.bidx");
+    remove(TEST_PATH);
+    remove(UNIQUE_PATH);
     bson_error_t err;
 
     bson_btree_t *tree = NULL;
@@ -117,7 +117,7 @@ int main(void) {
         bson_btree_offset_list_free(&out);
     }
     bson_btree_close(tree, &err);
-    unlink(TEST_PATH);
+    remove(TEST_PATH);
 
     /* Unique index: duplicate rejection, and re-insert after delete. */
     bson_btree_t *utree = NULL;
@@ -134,7 +134,7 @@ int main(void) {
     st = bson_btree_insert(utree, k1, 3, &err);
     assert(st == BSON_OK);
     bson_btree_close(utree, &err);
-    unlink(UNIQUE_PATH);
+    remove(UNIQUE_PATH);
 
     printf("test_btree: all assertions passed\n");
     return 0;

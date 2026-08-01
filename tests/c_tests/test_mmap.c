@@ -5,16 +5,16 @@
  * only via CMakeLists.txt's BUILD_TESTING option.
  */
 #include "custom_bson/platform_mmap.h"
+#include "test_common.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-
-static const char *TEST_PATH = "/tmp/custom_bson_test_mmap.bin";
 
 int main(void) {
-    unlink(TEST_PATH);
+    char TEST_PATH[512];
+    test_tmp_path(TEST_PATH, sizeof(TEST_PATH), "custom_bson_test_mmap.bin");
+    remove(TEST_PATH);
 
     bson_error_t err;
 
@@ -61,7 +61,7 @@ int main(void) {
     bson_mmap_close(NULL, &err);
     bson_mmap_close(file, &err);
 
-    unlink(TEST_PATH);
+    remove(TEST_PATH);
     printf("test_mmap: all assertions passed\n");
     return 0;
 }

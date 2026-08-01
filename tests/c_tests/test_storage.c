@@ -5,14 +5,12 @@
  */
 #include "custom_bson/storage.h"
 #include "custom_bson/bson_engine.h"
+#include "test_common.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-
-static const char *TEST_PATH = "/tmp/custom_bson_test_storage.bin";
 
 static uint8_t *make_doc(const char *key, int32_t val, size_t *out_len) {
     bson_writer_t w;
@@ -37,7 +35,9 @@ static size_t count_live(bson_mmap_file_t *file) {
 }
 
 int main(void) {
-    unlink(TEST_PATH);
+    char TEST_PATH[512];
+    test_tmp_path(TEST_PATH, sizeof(TEST_PATH), "custom_bson_test_storage.bin");
+    remove(TEST_PATH);
     bson_error_t err;
 
     bson_mmap_file_t *file = NULL;
@@ -99,6 +99,6 @@ int main(void) {
     bson_mmap_close(file, &err);
 
     printf("test_storage: all assertions passed\n");
-    unlink(TEST_PATH);
+    remove(TEST_PATH);
     return 0;
 }

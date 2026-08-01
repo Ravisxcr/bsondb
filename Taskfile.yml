@@ -47,7 +47,7 @@ tasks:
     desc: Run the native C smoke test executables
     deps: [build-c]
     cmds:
-      - ctest --test-dir build --output-on-failure
+      - ctest --test-dir build --output-on-failure -C Debug
 
   test:
     desc: Run all tests (Python and C)
