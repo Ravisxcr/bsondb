@@ -13,38 +13,38 @@
  * u32/u64 reuse wire_spec.h's byte-swap macros; u16 has no equivalent
  * there so it's handled inline. All are no-ops on little-endian hosts. */
 
-static uint16_t read_u16(const uint8_t *p) {
-    uint16_t v;
-    memcpy(&v, p, 2);
+static uint16_t read_u16(const uint8_t *bytes) {
+    uint16_t value;
+    memcpy(&value, bytes, 2);
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    v = (uint16_t)((v >> 8) | (v << 8));
+    value = (uint16_t)((value >> 8) | (value << 8));
 #endif
-    return v;
+    return value;
 }
 
-static void write_u16(uint8_t *p, uint16_t v) {
+static void write_u16(uint8_t *bytes, uint16_t value) {
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    v = (uint16_t)((v >> 8) | (v << 8));
+    value = (uint16_t)((value >> 8) | (value << 8));
 #endif
-    memcpy(p, &v, 2);
+    memcpy(bytes, &value, 2);
 }
 
-static void write_u32(uint8_t *p, uint32_t v) {
-    uint32_t le = BSON_HOST_TO_LE32(v);
-    memcpy(p, &le, 4);
+static void write_u32(uint8_t *bytes, uint32_t value) {
+    uint32_t little_endian_value = BSON_HOST_TO_LE32(value);
+    memcpy(bytes, &little_endian_value, 4);
 }
 
-static uint64_t read_u64(const uint8_t *p) {
-    uint64_t v;
-    memcpy(&v, p, 8);
-    return bson_le64_to_host(v);
+static uint64_t read_u64(const uint8_t *bytes) {
+    uint64_t value;
+    memcpy(&value, bytes, 8);
+    return bson_le64_to_host(value);
 }
 
-static void write_u64(uint8_t *p, uint64_t v) {
-    uint64_t le = BSON_HOST_TO_LE64(v);
-    memcpy(p, &le, 8);
+static void write_u64(uint8_t *bytes, uint64_t value) {
+    uint64_t little_endian_value = BSON_HOST_TO_LE64(value);
+    memcpy(bytes, &little_endian_value, 8);
 }
 
 /* Only ever called on a BSON_MMAP_READ_WRITE handle -- platform_mmap.h
@@ -67,8 +67,8 @@ bson_status_t bson_storage_open_header(bson_mmap_file_t *file, bson_mmap_mode_t 
             bson_error_set(err, BSON_ERR_INVALID_FILE_HEADER, "collection data file is empty");
             return BSON_ERR_INVALID_FILE_HEADER;
         }
-        bson_status_t st = bson_mmap_resize(file, BSON_STORAGE_INITIAL_CAPACITY, err);
-        if (st != BSON_OK) return st;
+        bson_status_t status = bson_mmap_resize(file, BSON_STORAGE_INITIAL_CAPACITY, err);
+        if (status != BSON_OK) return status;
 
         uint8_t *base = mutable_base(file);
         memset(base, 0, bson_mmap_size(file));
@@ -99,8 +99,8 @@ bson_status_t bson_storage_open_header(bson_mmap_file_t *file, bson_mmap_mode_t 
         }
         uint16_t flags = read_u16(base + 6);
         if ((flags & BSON_STORAGE_FLAG_DIRTY) != 0 && mode == BSON_MMAP_READ_WRITE) {
-            bson_status_t st = bson_storage_recover(file, err);
-            if (st != BSON_OK) return st;
+            bson_status_t status = bson_storage_recover(file, err);
+            if (status != BSON_OK) return status;
         }
     }
 
@@ -108,8 +108,8 @@ bson_status_t bson_storage_open_header(bson_mmap_file_t *file, bson_mmap_mode_t 
         uint8_t *base = mutable_base(file);
         uint16_t flags = read_u16(base + 6);
         write_u16(base + 6, (uint16_t)(flags | BSON_STORAGE_FLAG_DIRTY));
-        bson_status_t st = bson_mmap_flush(file, err);
-        if (st != BSON_OK) return st;
+        bson_status_t status = bson_mmap_flush(file, err);
+        if (status != BSON_OK) return status;
     }
 
     bson_error_clear(err);
@@ -142,10 +142,10 @@ bson_status_t bson_storage_recover(bson_mmap_file_t *file, bson_error_t *err) {
         size_t doc_off = pos + 1;
         if (doc_off + BSON_DOC_MIN_LEN > cap) break;
 
-        bson_reader_t r;
-        bson_reader_init(&r, base + doc_off, cap - doc_off);
+        bson_reader_t reader;
+        bson_reader_init(&reader, base + doc_off, cap - doc_off);
         int32_t doc_len;
-        if (bson_reader_read_i32(&r, &doc_len) != BSON_OK) break;
+        if (bson_reader_read_i32(&reader, &doc_len) != BSON_OK) break;
         if (doc_len < BSON_DOC_MIN_LEN || (uint32_t)doc_len > BSON_MAX_DOCUMENT_SIZE) break;
 
         size_t record_len = 1 + (size_t)doc_len;
@@ -184,8 +184,8 @@ bson_status_t bson_storage_append(bson_mmap_file_t *file, const uint8_t *doc, si
             new_cap *= 2;
         }
         new_cap = ((new_cap + BSON_STORAGE_PAGE_SIZE - 1) / BSON_STORAGE_PAGE_SIZE) * BSON_STORAGE_PAGE_SIZE;
-        bson_status_t st = bson_mmap_resize(file, new_cap, err);
-        if (st != BSON_OK) return st;
+        bson_status_t status = bson_mmap_resize(file, new_cap, err);
+        if (status != BSON_OK) return status;
     }
 
     /* Re-fetch after any possible resize -- never reuse a pointer
@@ -240,20 +240,20 @@ bson_status_t bson_storage_read(const bson_mmap_file_t *file, size_t record_off,
     }
 
     const uint8_t *base = bson_mmap_data(file);
-    uint8_t status = base[record_off];
+    uint8_t record_status = base[record_off];
     size_t doc_off = record_off + 1;
 
-    bson_reader_t r;
-    bson_reader_init(&r, base + doc_off, data_end - doc_off);
+    bson_reader_t reader;
+    bson_reader_init(&reader, base + doc_off, data_end - doc_off);
     int32_t doc_len;
-    bson_status_t st = bson_reader_read_i32(&r, &doc_len);
-    if (st != BSON_OK || doc_len < BSON_DOC_MIN_LEN) {
+    bson_status_t status = bson_reader_read_i32(&reader, &doc_len);
+    if (status != BSON_OK || doc_len < BSON_DOC_MIN_LEN) {
         bson_error_set(err, BSON_ERR_RECORD_NOT_FOUND, "offset %zu does not reference a valid record",
                         record_off);
         return BSON_ERR_RECORD_NOT_FOUND;
     }
 
-    if (out_status) *out_status = status;
+    if (out_status) *out_status = record_status;
     if (out_doc_off) *out_doc_off = doc_off;
     if (out_doc_len) *out_doc_len = (size_t)doc_len;
 

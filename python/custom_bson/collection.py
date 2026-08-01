@@ -25,7 +25,7 @@ from .results import DeleteResult, InsertManyResult, InsertOneResult, UpdateResu
 
 
 def _reject_update_operators(replacement: Mapping[str, Any], caller: str) -> None:
-    if any(k.startswith("$") for k in replacement):
+    if any(key.startswith("$") for key in replacement):
         raise InvalidDocument(f"{caller}() replacement document must not contain update operators")
 
 
@@ -34,9 +34,9 @@ def _distinct_candidates(doc: Mapping[str, Any], segments: List[str]) -> List[An
     list value at the path contributes its elements, a scalar
     contributes itself, and a missing path contributes nothing."""
     cursor: Any = doc
-    for seg in segments:
-        if isinstance(cursor, dict) and seg in cursor:
-            cursor = cursor[seg]
+    for segment in segments:
+        if isinstance(cursor, dict) and segment in cursor:
+            cursor = cursor[segment]
         else:
             return []
     return cursor if isinstance(cursor, list) else [cursor]
@@ -94,19 +94,19 @@ class Collection:
         unknown $operator) against an empty collection would otherwise
         never raise: the scan loop would simply never run.
         """
-        flt: Mapping[str, Any] = filter or {}
-        matches({}, flt)  # validates operator/shape, independent of any real document
-        return self.__scan(flt)
+        resolved_filter: Mapping[str, Any] = filter or {}
+        matches({}, resolved_filter)  # validates operator/shape, independent of any real document
+        return self.__scan(resolved_filter)
 
-    def __scan(self, flt: Mapping[str, Any]) -> Iterator[Tuple[int, Dict[str, Any]]]:
-        indexed = self._index_lookup_for_filter(flt)
+    def __scan(self, resolved_filter: Mapping[str, Any]) -> Iterator[Tuple[int, Dict[str, Any]]]:
+        indexed = self._index_lookup_for_filter(resolved_filter)
         if indexed is not None:
             for offset in indexed:
                 raw = self._handle.read_record(offset)
                 if raw is None:
                     continue  # tombstoned since the index lookup ran
                 doc = decode(raw)
-                if matches(doc, flt):  # index only narrows candidates; full filter still re-checked
+                if matches(doc, resolved_filter):  # index only narrows candidates; full filter still re-checked
                     yield offset, doc
             return
 
@@ -121,19 +121,20 @@ class Collection:
             if raw is None:
                 continue  # tombstoned between the scan step and this read
             doc = decode(raw)
-            if matches(doc, flt):
+            if matches(doc, resolved_filter):
                 yield offset, doc
 
-    def _index_lookup_for_filter(self, flt: Mapping[str, Any]) -> Optional[List[int]]:
-        """Returns candidate record offsets from a B-Tree index if `flt`
-        reduces to exactly one top-level equality/$eq clause on an
-        indexed field, else None (meaning: fall back to a full scan).
-        Conservative by design -- see query.py's module docstring and
-        include/custom_bson/btree.h's note on why only equality (never
-        $gt/$lt ranges) is routed through the index this slice."""
-        if len(flt) != 1:
+    def _index_lookup_for_filter(self, resolved_filter: Mapping[str, Any]) -> Optional[List[int]]:
+        """Returns candidate record offsets from a B-Tree index if
+        `resolved_filter` reduces to exactly one top-level equality/$eq
+        clause on an indexed field, else None (meaning: fall back to a
+        full scan). Conservative by design -- see query.py's module
+        docstring and include/custom_bson/btree.h's note on why only
+        equality (never $gt/$lt ranges) is routed through the index
+        this slice."""
+        if len(resolved_filter) != 1:
             return None
-        ((field, condition),) = flt.items()
+        ((field, condition),) = resolved_filter.items()
         if field.startswith("$"):
             return None
         if isinstance(condition, Mapping):

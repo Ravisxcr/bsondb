@@ -100,14 +100,14 @@ static void CollectionHandle_dealloc(CollectionHandleObject *self) {
 static PyObject *CollectionHandle_close(CollectionHandleObject *self, PyObject *Py_UNUSED(ignored)) {
     if (self->file) {
         bson_error_t err;
-        bson_status_t st = bson_storage_mark_clean(self->file, &err);
-        if (st != BSON_OK) {
+        bson_status_t status = bson_storage_mark_clean(self->file, &err);
+        if (status != BSON_OK) {
             storage_error_to_python(&err);
             return NULL;
         }
-        st = bson_mmap_close(self->file, &err);
+        status = bson_mmap_close(self->file, &err);
         self->file = NULL;
-        if (st != BSON_OK) {
+        if (status != BSON_OK) {
             storage_error_to_python(&err);
             return NULL;
         }
@@ -118,8 +118,8 @@ static PyObject *CollectionHandle_close(CollectionHandleObject *self, PyObject *
 static PyObject *CollectionHandle_flush(CollectionHandleObject *self, PyObject *Py_UNUSED(ignored)) {
     CHECK_OPEN(self);
     bson_error_t err;
-    bson_status_t st = bson_mmap_flush(self->file, &err);
-    if (st != BSON_OK) {
+    bson_status_t status = bson_mmap_flush(self->file, &err);
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
@@ -137,10 +137,10 @@ static PyObject *CollectionHandle_append_record(CollectionHandleObject *self, Py
 
     size_t offset;
     bson_error_t err;
-    bson_status_t st =
+    bson_status_t status =
         bson_storage_append(self->file, (const uint8_t *)view.buf, (size_t)view.len, &offset, &err);
     PyBuffer_Release(&view);
-    if (st != BSON_OK) {
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
@@ -159,8 +159,8 @@ static PyObject *CollectionHandle_read_record(CollectionHandleObject *self, PyOb
     uint8_t status;
     size_t doc_off, doc_len;
     bson_error_t err;
-    bson_status_t st = bson_storage_read(self->file, (size_t)offset, &status, &doc_off, &doc_len, &err);
-    if (st != BSON_OK) {
+    bson_status_t read_status = bson_storage_read(self->file, (size_t)offset, &status, &doc_off, &doc_len, &err);
+    if (read_status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
@@ -181,8 +181,8 @@ static PyObject *CollectionHandle_tombstone_record(CollectionHandleObject *self,
     }
 
     bson_error_t err;
-    bson_status_t st = bson_storage_tombstone(self->file, (size_t)offset, &err);
-    if (st != BSON_OK) {
+    bson_status_t status = bson_storage_tombstone(self->file, (size_t)offset, &err);
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
@@ -209,22 +209,22 @@ static PyObject *CollectionHandle_next_live_offset(CollectionHandleObject *self,
     const uint8_t *base = bson_mmap_data(self->file);
     size_t data_end = bson_storage_data_end(self->file);
 
-    bson_scanner_t sc;
-    bson_scanner_open(&sc, base, data_end, &err);
+    bson_scanner_t scanner;
+    bson_scanner_open(&scanner, base, data_end, &err);
 
     if (prev >= 0) {
         uint8_t status;
         size_t doc_off, doc_len;
-        bson_status_t st = bson_storage_read(self->file, (size_t)prev, &status, &doc_off, &doc_len, &err);
-        if (st != BSON_OK) {
+        bson_status_t read_status = bson_storage_read(self->file, (size_t)prev, &status, &doc_off, &doc_len, &err);
+        if (read_status != BSON_OK) {
             storage_error_to_python(&err);
             return NULL;
         }
-        sc.pos = doc_off + doc_len;
+        scanner.pos = doc_off + doc_len;
     }
 
     size_t record_off, doc_off, doc_len;
-    bool found = bson_scanner_next(&sc, &record_off, &doc_off, &doc_len, &err);
+    bool found = bson_scanner_next(&scanner, &record_off, &doc_off, &doc_len, &err);
     (void)doc_off;
     (void)doc_len;
     if (!found) {
@@ -311,9 +311,9 @@ static void IndexHandle_dealloc(IndexHandleObject *self) {
 static PyObject *IndexHandle_close(IndexHandleObject *self, PyObject *Py_UNUSED(ignored)) {
     if (self->tree) {
         bson_error_t err;
-        bson_status_t st = bson_btree_close(self->tree, &err);
+        bson_status_t status = bson_btree_close(self->tree, &err);
         self->tree = NULL;
-        if (st != BSON_OK) {
+        if (status != BSON_OK) {
             storage_error_to_python(&err);
             return NULL;
         }
@@ -324,8 +324,8 @@ static PyObject *IndexHandle_close(IndexHandleObject *self, PyObject *Py_UNUSED(
 static PyObject *IndexHandle_flush(IndexHandleObject *self, PyObject *Py_UNUSED(ignored)) {
     CHECK_TREE_OPEN(self);
     bson_error_t err;
-    bson_status_t st = bson_btree_flush(self->tree, &err);
-    if (st != BSON_OK) {
+    bson_status_t status = bson_btree_flush(self->tree, &err);
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
@@ -347,9 +347,9 @@ static PyObject *IndexHandle_insert(IndexHandleObject *self, PyObject *args) {
         return NULL;
     }
     bson_error_t err;
-    bson_status_t st = bson_btree_insert(self->tree, (const uint8_t *)key_view.buf, (uint64_t)offset, &err);
+    bson_status_t status = bson_btree_insert(self->tree, (const uint8_t *)key_view.buf, (uint64_t)offset, &err);
     PyBuffer_Release(&key_view);
-    if (st != BSON_OK) {
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
@@ -360,12 +360,12 @@ static PyObject *offset_list_to_pylist(const bson_btree_offset_list_t *out) {
     PyObject *list = PyList_New((Py_ssize_t)out->len);
     if (!list) return NULL;
     for (size_t i = 0; i < out->len; i++) {
-        PyObject *v = PyLong_FromUnsignedLongLong(out->data[i]);
-        if (!v) {
+        PyObject *offset_value = PyLong_FromUnsignedLongLong(out->data[i]);
+        if (!offset_value) {
             Py_DECREF(list);
             return NULL;
         }
-        PyList_SET_ITEM(list, (Py_ssize_t)i, v); /* steals reference */
+        PyList_SET_ITEM(list, (Py_ssize_t)i, offset_value); /* steals reference */
     }
     return list;
 }
@@ -387,9 +387,9 @@ static PyObject *IndexHandle_lookup(IndexHandleObject *self, PyObject *args) {
     bson_btree_offset_list_t out;
     bson_btree_offset_list_init(&out);
     bson_error_t err;
-    bson_status_t st = bson_btree_lookup(self->tree, (const uint8_t *)key_view.buf, &out, &err);
+    bson_status_t status = bson_btree_lookup(self->tree, (const uint8_t *)key_view.buf, &out, &err);
     PyBuffer_Release(&key_view);
-    if (st != BSON_OK) {
+    if (status != BSON_OK) {
         bson_btree_offset_list_free(&out);
         storage_error_to_python(&err);
         return NULL;
@@ -440,13 +440,13 @@ static PyObject *IndexHandle_range(IndexHandleObject *self, PyObject *args) {
     bson_btree_offset_list_t out;
     bson_btree_offset_list_init(&out);
     bson_error_t err;
-    bson_status_t st =
+    bson_status_t status =
         bson_btree_range(self->tree, low_ptr, low_incl != 0, high_ptr, high_incl != 0, &out, &err);
 
     if (have_low) PyBuffer_Release(&low_view);
     if (have_high) PyBuffer_Release(&high_view);
 
-    if (st != BSON_OK) {
+    if (status != BSON_OK) {
         bson_btree_offset_list_free(&out);
         storage_error_to_python(&err);
         return NULL;
@@ -471,9 +471,9 @@ static PyObject *IndexHandle_delete_entry(IndexHandleObject *self, PyObject *arg
         return NULL;
     }
     bson_error_t err;
-    bson_status_t st = bson_btree_delete(self->tree, (const uint8_t *)key_view.buf, (uint64_t)offset, &err);
+    bson_status_t status = bson_btree_delete(self->tree, (const uint8_t *)key_view.buf, (uint64_t)offset, &err);
     PyBuffer_Release(&key_view);
-    if (st != BSON_OK) {
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
@@ -541,14 +541,14 @@ static PyObject *py_open_collection(PyObject *self, PyObject *args) {
 
     bson_mmap_file_t *file = NULL;
     bson_error_t err;
-    bson_status_t st = bson_mmap_open(path, BSON_MMAP_READ_WRITE, 0, &file, &err);
-    if (st != BSON_OK) {
+    bson_status_t status = bson_mmap_open(path, BSON_MMAP_READ_WRITE, 0, &file, &err);
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
 
-    st = bson_storage_open_header(file, BSON_MMAP_READ_WRITE, &err);
-    if (st != BSON_OK) {
+    status = bson_storage_open_header(file, BSON_MMAP_READ_WRITE, &err);
+    if (status != BSON_OK) {
         bson_error_t close_err;
         bson_mmap_close(file, &close_err);
         storage_error_to_python(&err);
@@ -578,9 +578,9 @@ static PyObject *py_create_index_file(PyObject *self, PyObject *args) {
 
     bson_btree_t *tree = NULL;
     bson_error_t err;
-    bson_status_t st =
+    bson_status_t status =
         bson_btree_create(path, field_path, (uint8_t)key_type_tag, unique != 0, descending != 0, &tree, &err);
-    if (st != BSON_OK) {
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }
@@ -602,8 +602,8 @@ static PyObject *py_open_index_file(PyObject *self, PyObject *args) {
 
     bson_btree_t *tree = NULL;
     bson_error_t err;
-    bson_status_t st = bson_btree_open(path, &tree, &err);
-    if (st != BSON_OK) {
+    bson_status_t status = bson_btree_open(path, &tree, &err);
+    if (status != BSON_OK) {
         storage_error_to_python(&err);
         return NULL;
     }

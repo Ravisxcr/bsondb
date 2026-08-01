@@ -72,7 +72,7 @@ class MongoClient:
         if os.path.exists(file_path):
             os.remove(file_path)
 
-        for key in [k for k in self._index_handles if k[0] == db_name and k[1] == coll_name]:
+        for key in [handle_key for handle_key in self._index_handles if handle_key[0] == db_name and handle_key[1] == coll_name]:
             self._index_handles.pop(key).close()
         db_dir = os.path.join(self._path, db_name)
         prefix = f"{coll_name}."

@@ -35,15 +35,15 @@ _EPOCH_UTC = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
 _MISSING = object()
 
 
-def _datetime_to_epoch_ms(dt: datetime.datetime) -> int:
+def _datetime_to_epoch_ms(value: datetime.datetime) -> int:
     """Mirrors _bson_core.c's encode-side datetime convention (naive
     datetimes treated as UTC) so a document's indexed key always
     matches the epoch-ms value that would be stored in its encoded
     BSON -- if these two conversions ever diverged, index lookups
     could silently miss documents."""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
-    delta = dt.astimezone(datetime.timezone.utc) - _EPOCH_UTC
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=datetime.timezone.utc)
+    delta = value.astimezone(datetime.timezone.utc) - _EPOCH_UTC
     return delta.days * 86400000 + delta.seconds * 1000 + delta.microseconds // 1000
 
 
@@ -83,9 +83,9 @@ def _direct_value(doc: Any, segments: List[str]) -> Any:
     through to encode_btree_key's final raise, since neither is a
     supported fixed-width key type."""
     cursor = doc
-    for seg in segments:
-        if isinstance(cursor, dict) and seg in cursor:
-            cursor = cursor[seg]
+    for segment in segments:
+        if isinstance(cursor, dict) and segment in cursor:
+            cursor = cursor[segment]
         else:
             return _MISSING
     return cursor

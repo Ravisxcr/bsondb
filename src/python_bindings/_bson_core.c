@@ -76,11 +76,11 @@ static void bson_error_to_python(const bson_error_t *err) {
 /* Wraps a raw bson_status_t from an engine call (which carries no
  * message of its own) into `err` with a human-readable message, so
  * every non-OK status reaching bson_error_to_python has real text. */
-static bson_status_t writer_call(bson_error_t *err, bson_status_t st, const char *what) {
-    if (st != BSON_OK) {
-        bson_error_set(err, st, "%s", what);
+static bson_status_t writer_call(bson_error_t *err, bson_status_t status, const char *what) {
+    if (status != BSON_OK) {
+        bson_error_set(err, status, "%s", what);
     }
-    return st;
+    return status;
 }
 
 /* ======================================================================
@@ -91,54 +91,54 @@ static bson_status_t writer_call(bson_error_t *err, bson_status_t st, const char
  * reliably UTC-agnostic).
  * ==================================================================== */
 
-static int64_t days_from_civil(int y, int m, int d) {
-    y -= (m <= 2);
-    int64_t era = (y >= 0 ? y : y - 399) / 400;
-    unsigned yoe = (unsigned)(y - era * 400);              /* [0, 399] */
-    unsigned doy = (153 * (unsigned)(m + (m > 2 ? -3 : 9)) + 2) / 5 + (unsigned)d - 1; /* [0, 365] */
+static int64_t days_from_civil(int year, int month, int day) {
+    year -= (month <= 2);
+    int64_t era = (year >= 0 ? year : year - 399) / 400;
+    unsigned yoe = (unsigned)(year - era * 400);              /* [0, 399] */
+    unsigned doy = (153 * (unsigned)(month + (month > 2 ? -3 : 9)) + 2) / 5 + (unsigned)day - 1; /* [0, 365] */
     unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;   /* [0, 146096] */
     return era * 146097 + (int64_t)doe - 719468;
 }
 
-static void civil_from_days(int64_t z, int *y, unsigned *m, unsigned *d) {
-    z += 719468;
+static void civil_from_days(int64_t days_since_epoch, int *out_year, unsigned *out_month, unsigned *out_day) {
+    int64_t z = days_since_epoch + 719468;
     int64_t era = (z >= 0 ? z : z - 146096) / 146097;
     unsigned doe = (unsigned)(z - era * 146097);                    /* [0, 146096] */
     unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; /* [0, 399] */
-    int64_t yr = (int64_t)yoe + era * 400;
+    int64_t computed_year = (int64_t)yoe + era * 400;
     unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);         /* [0, 365] */
     unsigned mp = (5 * doy + 2) / 153;                              /* [0, 11] */
-    *d = doy - (153 * mp + 2) / 5 + 1;                              /* [1, 31] */
-    *m = mp + (mp < 10 ? 3 : (unsigned)-9);                         /* [1, 12] */
-    *y = (int)(yr + (*m <= 2));
+    *out_day = doy - (153 * mp + 2) / 5 + 1;                        /* [1, 31] */
+    *out_month = mp + (mp < 10 ? 3 : (unsigned)-9);                 /* [1, 12] */
+    *out_year = (int)(computed_year + (*out_month <= 2));
 }
 
-static int64_t floordiv_i64(int64_t a, int64_t b) {
-    int64_t q = a / b;
-    int64_t r = a % b;
-    if (r != 0 && ((r < 0) != (b < 0))) q -= 1;
-    return q;
+static int64_t floordiv_i64(int64_t dividend, int64_t divisor) {
+    int64_t quotient = dividend / divisor;
+    int64_t remainder = dividend % divisor;
+    if (remainder != 0 && ((remainder < 0) != (divisor < 0))) quotient -= 1;
+    return quotient;
 }
 
-static bson_status_t datetime_to_epoch_ms(PyObject *dt, int64_t *out_ms, bson_error_t *err) {
-    int y = PyDateTime_GET_YEAR(dt);
-    int mo = PyDateTime_GET_MONTH(dt);
-    int d = PyDateTime_GET_DAY(dt);
-    int hh = PyDateTime_DATE_GET_HOUR(dt);
-    int mm = PyDateTime_DATE_GET_MINUTE(dt);
-    int ss = PyDateTime_DATE_GET_SECOND(dt);
-    int us = PyDateTime_DATE_GET_MICROSECOND(dt);
+static bson_status_t datetime_to_epoch_ms(PyObject *py_datetime, int64_t *out_ms, bson_error_t *err) {
+    int year = PyDateTime_GET_YEAR(py_datetime);
+    int month = PyDateTime_GET_MONTH(py_datetime);
+    int day = PyDateTime_GET_DAY(py_datetime);
+    int hour = PyDateTime_DATE_GET_HOUR(py_datetime);
+    int minute = PyDateTime_DATE_GET_MINUTE(py_datetime);
+    int second = PyDateTime_DATE_GET_SECOND(py_datetime);
+    int microsecond = PyDateTime_DATE_GET_MICROSECOND(py_datetime);
 
-    int64_t days = days_from_civil(y, mo, d);
-    int64_t ms = days * 86400000LL + (int64_t)hh * 3600000LL + (int64_t)mm * 60000LL +
-                 (int64_t)ss * 1000LL + (int64_t)(us / 1000);
+    int64_t days = days_from_civil(year, month, day);
+    int64_t ms = days * 86400000LL + (int64_t)hour * 3600000LL + (int64_t)minute * 60000LL +
+                 (int64_t)second * 1000LL + (int64_t)(microsecond / 1000);
 
     /* Naive datetimes are treated as already-UTC (documented behavior,
      * matches pymongo's default). Aware datetimes are converted using
      * their UTC offset. */
-    PyObject *tzinfo = PyDateTime_DATE_GET_TZINFO(dt);
+    PyObject *tzinfo = PyDateTime_DATE_GET_TZINFO(py_datetime);
     if (tzinfo != Py_None) {
-        PyObject *offset = PyObject_CallMethod(dt, "utcoffset", NULL);
+        PyObject *offset = PyObject_CallMethod(py_datetime, "utcoffset", NULL);
         if (!offset) {
             bson_error_set(err, BSON_ERR_UNSUPPORTED_PYTHON_TYPE,
                             "failed to compute datetime UTC offset");
@@ -175,9 +175,9 @@ static PyObject *datetime_from_epoch_ms(int64_t ms, bson_error_t *err) {
     int64_t days = floordiv_i64(ms, 86400000LL);
     int64_t rem = ms - days * 86400000LL; /* [0, 86400000) */
 
-    int y;
-    unsigned mo, d;
-    civil_from_days(days, &y, &mo, &d);
+    int year;
+    unsigned month, day;
+    civil_from_days(days, &year, &month, &day);
 
     int hour = (int)(rem / 3600000LL);
     rem %= 3600000LL;
@@ -185,15 +185,15 @@ static PyObject *datetime_from_epoch_ms(int64_t ms, bson_error_t *err) {
     rem %= 60000LL;
     int second = (int)(rem / 1000LL);
     rem %= 1000LL;
-    int micro = (int)(rem * 1000LL);
+    int microsecond = (int)(rem * 1000LL);
 
-    if (y < 1 || y > 9999) {
+    if (year < 1 || year > 9999) {
         bson_error_set(err, BSON_ERR_VALUE_OUT_OF_RANGE,
                         "datetime value is outside Python's supported year range (1-9999)");
         return NULL;
     }
 
-    return PyDateTime_FromDateAndTime(y, (int)mo, (int)d, hour, minute, second, micro);
+    return PyDateTime_FromDateAndTime(year, (int)month, (int)day, hour, minute, second, microsecond);
 }
 
 /* ======================================================================
@@ -216,72 +216,72 @@ static PyObject *datetime_from_epoch_ms(int64_t ms, bson_error_t *err) {
         }                                                                                    \
     } while (0)
 
-static bson_status_t encode_document_body(bson_writer_t *w, PyObject *dict, int depth,
+static bson_status_t encode_document_body(bson_writer_t *writer, PyObject *dict, int depth,
                                            bson_error_t *err);
-static bson_status_t encode_array_body(bson_writer_t *w, PyObject *fast_seq, int depth,
+static bson_status_t encode_array_body(bson_writer_t *writer, PyObject *fast_seq, int depth,
                                         bson_error_t *err);
 
-static bson_status_t encode_element(bson_writer_t *w, const char *key, Py_ssize_t key_len,
+static bson_status_t encode_element(bson_writer_t *writer, const char *key, Py_ssize_t key_len,
                                      PyObject *value, int depth, bson_error_t *err) {
-    bson_status_t st;
+    bson_status_t status;
 
     if (value == Py_None) {
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_NULL, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_NULL, key, (size_t)key_len),
                           "failed to write null element header");
-        if (st != BSON_OK) return st;
-        return writer_call(err, bson_writer_append_null(w), "failed to write null value");
+        if (status != BSON_OK) return status;
+        return writer_call(err, bson_writer_append_null(writer), "failed to write null value");
     }
 
     if (PyBool_Check(value)) {
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_BOOL, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_BOOL, key, (size_t)key_len),
                           "failed to write bool element header");
-        if (st != BSON_OK) return st;
-        return writer_call(err, bson_writer_append_bool(w, value == Py_True), "failed to write bool value");
+        if (status != BSON_OK) return status;
+        return writer_call(err, bson_writer_append_bool(writer, value == Py_True), "failed to write bool value");
     }
 
     if (PyLong_Check(value)) {
         int overflow = 0;
-        long long v = PyLong_AsLongLongAndOverflow(value, &overflow);
+        long long int_value = PyLong_AsLongLongAndOverflow(value, &overflow);
         if (overflow != 0) {
             bson_error_set(err, BSON_ERR_VALUE_OUT_OF_RANGE,
                             "integer value out of range for BSON int64 (max 64-bit signed)");
             return BSON_ERR_VALUE_OUT_OF_RANGE;
         }
-        if (v == -1 && PyErr_Occurred()) {
+        if (int_value == -1 && PyErr_Occurred()) {
             bson_error_set(err, BSON_ERR_VALUE_OUT_OF_RANGE, "failed to convert Python int");
             return BSON_ERR_VALUE_OUT_OF_RANGE;
         }
-        if (v >= INT32_MIN && v <= INT32_MAX) {
-            st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_INT32, key, (size_t)key_len),
+        if (int_value >= INT32_MIN && int_value <= INT32_MAX) {
+            status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_INT32, key, (size_t)key_len),
                               "failed to write int32 element header");
-            if (st != BSON_OK) return st;
-            return writer_call(err, bson_writer_append_int32(w, (int32_t)v), "failed to write int32 value");
+            if (status != BSON_OK) return status;
+            return writer_call(err, bson_writer_append_int32(writer, (int32_t)int_value), "failed to write int32 value");
         }
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_INT64, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_INT64, key, (size_t)key_len),
                           "failed to write int64 element header");
-        if (st != BSON_OK) return st;
-        return writer_call(err, bson_writer_append_int64(w, (int64_t)v), "failed to write int64 value");
+        if (status != BSON_OK) return status;
+        return writer_call(err, bson_writer_append_int64(writer, (int64_t)int_value), "failed to write int64 value");
     }
 
     if (PyFloat_Check(value)) {
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_DOUBLE, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_DOUBLE, key, (size_t)key_len),
                           "failed to write double element header");
-        if (st != BSON_OK) return st;
-        return writer_call(err, bson_writer_append_double(w, PyFloat_AS_DOUBLE(value)),
+        if (status != BSON_OK) return status;
+        return writer_call(err, bson_writer_append_double(writer, PyFloat_AS_DOUBLE(value)),
                             "failed to write double value");
     }
 
     if (PyUnicode_Check(value)) {
         Py_ssize_t slen;
-        const char *s = PyUnicode_AsUTF8AndSize(value, &slen);
-        if (!s) {
+        const char *utf8_str = PyUnicode_AsUTF8AndSize(value, &slen);
+        if (!utf8_str) {
             bson_error_set(err, BSON_ERR_UNSUPPORTED_PYTHON_TYPE, "string value is not valid unicode");
             return BSON_ERR_UNSUPPORTED_PYTHON_TYPE;
         }
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_STRING, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_STRING, key, (size_t)key_len),
                           "failed to write string element header");
-        if (st != BSON_OK) return st;
-        return writer_call(err, bson_writer_append_utf8(w, s, (size_t)slen), "failed to write string value");
+        if (status != BSON_OK) return status;
+        return writer_call(err, bson_writer_append_utf8(writer, utf8_str, (size_t)slen), "failed to write string value");
     }
 
     if (PyBytes_Check(value) || PyByteArray_Check(value)) {
@@ -291,16 +291,16 @@ static bson_status_t encode_element(bson_writer_t *w, const char *key, Py_ssize_
                             "failed to get a buffer for bytes-like value");
             return BSON_ERR_UNSUPPORTED_PYTHON_TYPE;
         }
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_BINARY, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_BINARY, key, (size_t)key_len),
                           "failed to write binary element header");
-        if (st == BSON_OK) {
-            st = writer_call(err,
-                              bson_writer_append_binary(w, BSON_SUBTYPE_GENERIC, (const uint8_t *)view.buf,
+        if (status == BSON_OK) {
+            status = writer_call(err,
+                              bson_writer_append_binary(writer, BSON_SUBTYPE_GENERIC, (const uint8_t *)view.buf,
                                                           (size_t)view.len),
                               "failed to write binary value");
         }
         PyBuffer_Release(&view);
-        return st;
+        return status;
     }
 
     if (g_ObjectId_type && PyObject_IsInstance(value, g_ObjectId_type)) {
@@ -314,45 +314,45 @@ static bson_status_t encode_element(bson_writer_t *w, const char *key, Py_ssize_
             bson_error_set(err, BSON_ERR_UNSUPPORTED_PYTHON_TYPE, "ObjectId.binary must be exactly 12 bytes");
             return BSON_ERR_UNSUPPORTED_PYTHON_TYPE;
         }
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_OBJECTID, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_OBJECTID, key, (size_t)key_len),
                           "failed to write ObjectId element header");
-        if (st == BSON_OK) {
-            st = writer_call(err, bson_writer_append_objectid(w, (const uint8_t *)PyBytes_AS_STRING(binary)),
+        if (status == BSON_OK) {
+            status = writer_call(err, bson_writer_append_objectid(writer, (const uint8_t *)PyBytes_AS_STRING(binary)),
                               "failed to write ObjectId value");
         }
         Py_DECREF(binary);
-        return st;
+        return status;
     }
 
     if (PyDateTime_Check(value)) {
         int64_t ms;
-        bson_status_t dst = datetime_to_epoch_ms(value, &ms, err);
-        if (dst != BSON_OK) return dst;
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_DATETIME, key, (size_t)key_len),
+        bson_status_t datetime_status = datetime_to_epoch_ms(value, &ms, err);
+        if (datetime_status != BSON_OK) return datetime_status;
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_DATETIME, key, (size_t)key_len),
                           "failed to write datetime element header");
-        if (st != BSON_OK) return st;
-        return writer_call(err, bson_writer_append_datetime_ms(w, ms), "failed to write datetime value");
+        if (status != BSON_OK) return status;
+        return writer_call(err, bson_writer_append_datetime_ms(writer, ms), "failed to write datetime value");
     }
 
     if (PyDict_Check(value)) {
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_DOCUMENT, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_DOCUMENT, key, (size_t)key_len),
                           "failed to write nested document element header");
-        if (st != BSON_OK) return st;
-        return encode_document_body(w, value, depth, err);
+        if (status != BSON_OK) return status;
+        return encode_document_body(writer, value, depth, err);
     }
 
     if (PyList_Check(value) || PyTuple_Check(value)) {
-        st = writer_call(err, bson_writer_append_element_header(w, BSON_TYPE_ARRAY, key, (size_t)key_len),
+        status = writer_call(err, bson_writer_append_element_header(writer, BSON_TYPE_ARRAY, key, (size_t)key_len),
                           "failed to write array element header");
-        if (st != BSON_OK) return st;
+        if (status != BSON_OK) return status;
         PyObject *fast = PySequence_Fast(value, "expected a list or tuple");
         if (!fast) {
             bson_error_set(err, BSON_ERR_UNSUPPORTED_PYTHON_TYPE, "failed to iterate sequence value");
             return BSON_ERR_UNSUPPORTED_PYTHON_TYPE;
         }
-        st = encode_array_body(w, fast, depth, err);
+        status = encode_array_body(writer, fast, depth, err);
         Py_DECREF(fast);
-        return st;
+        return status;
     }
 
     bson_error_set(err, BSON_ERR_UNSUPPORTED_PYTHON_TYPE, "cannot encode value of type '%s' to BSON",
@@ -360,14 +360,14 @@ static bson_status_t encode_element(bson_writer_t *w, const char *key, Py_ssize_
     return BSON_ERR_UNSUPPORTED_PYTHON_TYPE;
 }
 
-static bson_status_t encode_document_body(bson_writer_t *w, PyObject *dict, int depth,
+static bson_status_t encode_document_body(bson_writer_t *writer, PyObject *dict, int depth,
                                            bson_error_t *err) {
     ENC_CHECK_DEPTH(depth, err);
 
     size_t patch;
-    bson_status_t st = writer_call(err, bson_writer_begin_document(w, &patch),
+    bson_status_t status = writer_call(err, bson_writer_begin_document(writer, &patch),
                                      "failed to begin document");
-    if (st != BSON_OK) return st;
+    if (status != BSON_OK) return status;
 
     PyObject *key;
     PyObject *value;
@@ -388,31 +388,31 @@ static bson_status_t encode_document_body(bson_writer_t *w, PyObject *dict, int 
             bson_error_set(err, BSON_ERR_INVALID_KEY, "document key contains an embedded NUL byte");
             return BSON_ERR_INVALID_KEY;
         }
-        st = encode_element(w, kstr, klen, value, depth + 1, err);
-        if (st != BSON_OK) return st;
+        status = encode_element(writer, kstr, klen, value, depth + 1, err);
+        if (status != BSON_OK) return status;
     }
 
-    return writer_call(err, bson_writer_end_document(w, patch), "failed to finalize document");
+    return writer_call(err, bson_writer_end_document(writer, patch), "failed to finalize document");
 }
 
-static bson_status_t encode_array_body(bson_writer_t *w, PyObject *fast_seq, int depth,
+static bson_status_t encode_array_body(bson_writer_t *writer, PyObject *fast_seq, int depth,
                                         bson_error_t *err) {
     ENC_CHECK_DEPTH(depth, err);
 
     size_t patch;
-    bson_status_t st = writer_call(err, bson_writer_begin_document(w, &patch), "failed to begin array");
-    if (st != BSON_OK) return st;
+    bson_status_t status = writer_call(err, bson_writer_begin_document(writer, &patch), "failed to begin array");
+    if (status != BSON_OK) return status;
 
-    Py_ssize_t n = PySequence_Fast_GET_SIZE(fast_seq);
-    for (Py_ssize_t i = 0; i < n; i++) {
+    Py_ssize_t item_count = PySequence_Fast_GET_SIZE(fast_seq);
+    for (Py_ssize_t i = 0; i < item_count; i++) {
         PyObject *item = PySequence_Fast_GET_ITEM(fast_seq, i); /* borrowed */
         char keybuf[24];
         int klen = snprintf(keybuf, sizeof(keybuf), "%zd", i);
-        st = encode_element(w, keybuf, (size_t)klen, item, depth + 1, err);
-        if (st != BSON_OK) return st;
+        status = encode_element(writer, keybuf, (size_t)klen, item, depth + 1, err);
+        if (status != BSON_OK) return status;
     }
 
-    return writer_call(err, bson_writer_end_document(w, patch), "failed to finalize array");
+    return writer_call(err, bson_writer_end_document(writer, patch), "failed to finalize array");
 }
 
 static PyObject *py_encode(PyObject *self, PyObject *args) {
@@ -424,17 +424,17 @@ static PyObject *py_encode(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    bson_writer_t w;
+    bson_writer_t writer;
     size_t hint = 256 + (size_t)PyDict_Size(doc) * 32;
-    if (bson_writer_init(&w, hint) != BSON_OK) {
+    if (bson_writer_init(&writer, hint) != BSON_OK) {
         return PyErr_NoMemory();
     }
 
     bson_error_t err;
     bson_error_clear(&err);
-    bson_status_t st = encode_document_body(&w, doc, 0, &err);
-    if (st != BSON_OK) {
-        bson_writer_free(&w);
+    bson_status_t status = encode_document_body(&writer, doc, 0, &err);
+    if (status != BSON_OK) {
+        bson_writer_free(&writer);
         if (!PyErr_Occurred()) {
             bson_error_to_python(&err);
         }
@@ -442,7 +442,7 @@ static PyObject *py_encode(PyObject *self, PyObject *args) {
     }
 
     size_t out_len;
-    uint8_t *buf = bson_writer_release(&w, &out_len);
+    uint8_t *buf = bson_writer_release(&writer, &out_len);
     PyObject *result = PyBytes_FromStringAndSize((const char *)buf, (Py_ssize_t)out_len);
     free(buf);
     return result;
@@ -457,58 +457,58 @@ static PyObject *build_document(const uint8_t *buf, size_t offset, size_t parent
 static PyObject *build_array(const uint8_t *buf, size_t offset, size_t parent_end, int depth,
                               bson_error_t *err);
 
-static PyObject *build_value(const uint8_t *buf, const bson_iter_t *it, int depth, bson_error_t *err) {
-    bson_status_t st;
+static PyObject *build_value(const uint8_t *buf, const bson_iter_t *iter, int depth, bson_error_t *err) {
+    bson_status_t status;
 
-    switch (it->type) {
+    switch (iter->type) {
         case BSON_TYPE_DOUBLE: {
-            double v;
-            st = bson_iter_value_double(it, &v);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt double element");
+            double value;
+            status = bson_iter_value_double(iter, &value);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt double element");
                 bson_error_to_python(err);
                 return NULL;
             }
-            return PyFloat_FromDouble(v);
+            return PyFloat_FromDouble(value);
         }
         case BSON_TYPE_STRING: {
-            const char *s;
+            const char *utf8_str;
             size_t slen;
-            st = bson_iter_value_utf8(it, &s, &slen);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt string element");
+            status = bson_iter_value_utf8(iter, &utf8_str, &slen);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt string element");
                 bson_error_to_python(err);
                 return NULL;
             }
-            return PyUnicode_FromStringAndSize(s, (Py_ssize_t)slen);
+            return PyUnicode_FromStringAndSize(utf8_str, (Py_ssize_t)slen);
         }
         case BSON_TYPE_DOCUMENT: {
-            size_t doff, dlen;
-            st = bson_iter_value_document(it, &doff, &dlen);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt embedded document element");
+            size_t doc_off, doc_len;
+            status = bson_iter_value_document(iter, &doc_off, &doc_len);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt embedded document element");
                 bson_error_to_python(err);
                 return NULL;
             }
-            return build_document(buf, doff, doff + dlen, depth + 1, err);
+            return build_document(buf, doc_off, doc_off + doc_len, depth + 1, err);
         }
         case BSON_TYPE_ARRAY: {
-            size_t doff, dlen;
-            st = bson_iter_value_document(it, &doff, &dlen);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt embedded array element");
+            size_t doc_off, doc_len;
+            status = bson_iter_value_document(iter, &doc_off, &doc_len);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt embedded array element");
                 bson_error_to_python(err);
                 return NULL;
             }
-            return build_array(buf, doff, doff + dlen, depth + 1, err);
+            return build_array(buf, doc_off, doc_off + doc_len, depth + 1, err);
         }
         case BSON_TYPE_BINARY: {
             uint8_t subtype;
             const uint8_t *data;
             size_t len;
-            st = bson_iter_value_binary(it, &subtype, &data, &len);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt binary element");
+            status = bson_iter_value_binary(iter, &subtype, &data, &len);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt binary element");
                 bson_error_to_python(err);
                 return NULL;
             }
@@ -516,9 +516,9 @@ static PyObject *build_value(const uint8_t *buf, const bson_iter_t *it, int dept
         }
         case BSON_TYPE_OBJECTID: {
             const uint8_t *oid;
-            st = bson_iter_value_objectid(it, &oid);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt ObjectId element");
+            status = bson_iter_value_objectid(iter, &oid);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt ObjectId element");
                 bson_error_to_python(err);
                 return NULL;
             }
@@ -529,55 +529,55 @@ static PyObject *build_value(const uint8_t *buf, const bson_iter_t *it, int dept
             return obj;
         }
         case BSON_TYPE_BOOL: {
-            bool v;
-            st = bson_iter_value_bool(it, &v);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt bool element");
+            bool value;
+            status = bson_iter_value_bool(iter, &value);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt bool element");
                 bson_error_to_python(err);
                 return NULL;
             }
-            return PyBool_FromLong(v ? 1 : 0);
+            return PyBool_FromLong(value ? 1 : 0);
         }
         case BSON_TYPE_DATETIME: {
             int64_t ms;
-            st = bson_iter_value_datetime_ms(it, &ms);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt datetime element");
+            status = bson_iter_value_datetime_ms(iter, &ms);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt datetime element");
                 bson_error_to_python(err);
                 return NULL;
             }
-            PyObject *dt = datetime_from_epoch_ms(ms, err);
-            if (!dt) {
+            PyObject *datetime_obj = datetime_from_epoch_ms(ms, err);
+            if (!datetime_obj) {
                 bson_error_to_python(err);
                 return NULL;
             }
-            return dt;
+            return datetime_obj;
         }
         case BSON_TYPE_NULL:
             Py_RETURN_NONE;
         case BSON_TYPE_INT32: {
-            int32_t v;
-            st = bson_iter_value_int32(it, &v);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt int32 element");
+            int32_t value;
+            status = bson_iter_value_int32(iter, &value);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt int32 element");
                 bson_error_to_python(err);
                 return NULL;
             }
-            return PyLong_FromLong(v);
+            return PyLong_FromLong(value);
         }
         case BSON_TYPE_INT64: {
-            int64_t v;
-            st = bson_iter_value_int64(it, &v);
-            if (st != BSON_OK) {
-                bson_error_set(err, st, "corrupt int64 element");
+            int64_t value;
+            status = bson_iter_value_int64(iter, &value);
+            if (status != BSON_OK) {
+                bson_error_set(err, status, "corrupt int64 element");
                 bson_error_to_python(err);
                 return NULL;
             }
-            return PyLong_FromLongLong(v);
+            return PyLong_FromLongLong(value);
         }
         default:
             bson_error_set(err, BSON_ERR_UNSUPPORTED_TYPE, "BSON type 0x%02x is not supported in this version",
-                            it->type);
+                            iter->type);
             bson_error_to_python(err);
             return NULL;
     }
@@ -592,9 +592,9 @@ static PyObject *build_document(const uint8_t *buf, size_t offset, size_t parent
         return NULL;
     }
 
-    bson_iter_t it;
-    bson_status_t st = bson_iter_init_nested(&it, buf, offset, parent_end, err);
-    if (st != BSON_OK) {
+    bson_iter_t iter;
+    bson_status_t status = bson_iter_init_nested(&iter, buf, offset, parent_end, err);
+    if (status != BSON_OK) {
         bson_error_to_python(err);
         return NULL;
     }
@@ -602,24 +602,24 @@ static PyObject *build_document(const uint8_t *buf, size_t offset, size_t parent
     PyObject *dict = PyDict_New();
     if (!dict) return NULL;
 
-    while (bson_iter_next(&it, err)) {
+    while (bson_iter_next(&iter, err)) {
         size_t klen;
-        const char *k = bson_iter_key(&it, &klen);
-        PyObject *pykey = PyUnicode_FromStringAndSize(k, (Py_ssize_t)klen);
+        const char *key_ptr = bson_iter_key(&iter, &klen);
+        PyObject *pykey = PyUnicode_FromStringAndSize(key_ptr, (Py_ssize_t)klen);
         if (!pykey) {
             Py_DECREF(dict);
             return NULL;
         }
-        PyObject *value = build_value(buf, &it, depth, err);
+        PyObject *value = build_value(buf, &iter, depth, err);
         if (!value) {
             Py_DECREF(pykey);
             Py_DECREF(dict);
             return NULL;
         }
-        int rc = PyDict_SetItem(dict, pykey, value);
+        int set_result = PyDict_SetItem(dict, pykey, value);
         Py_DECREF(pykey);
         Py_DECREF(value);
-        if (rc != 0) {
+        if (set_result != 0) {
             Py_DECREF(dict);
             return NULL;
         }
@@ -641,9 +641,9 @@ static PyObject *build_array(const uint8_t *buf, size_t offset, size_t parent_en
         return NULL;
     }
 
-    bson_iter_t it;
-    bson_status_t st = bson_iter_init_nested(&it, buf, offset, parent_end, err);
-    if (st != BSON_OK) {
+    bson_iter_t iter;
+    bson_status_t status = bson_iter_init_nested(&iter, buf, offset, parent_end, err);
+    if (status != BSON_OK) {
         bson_error_to_python(err);
         return NULL;
     }
@@ -651,15 +651,15 @@ static PyObject *build_array(const uint8_t *buf, size_t offset, size_t parent_en
     PyObject *list = PyList_New(0);
     if (!list) return NULL;
 
-    while (bson_iter_next(&it, err)) {
-        PyObject *value = build_value(buf, &it, depth, err);
+    while (bson_iter_next(&iter, err)) {
+        PyObject *value = build_value(buf, &iter, depth, err);
         if (!value) {
             Py_DECREF(list);
             return NULL;
         }
-        int rc = PyList_Append(list, value);
+        int append_result = PyList_Append(list, value);
         Py_DECREF(value);
-        if (rc != 0) {
+        if (append_result != 0) {
             Py_DECREF(list);
             return NULL;
         }
@@ -693,15 +693,15 @@ static PyObject *py_decode(PyObject *self, PyObject *args) {
      * large buffers this pure-C, no-Python-object-touching scan runs
      * with the GIL released; for small buffers the flip isn't worth
      * it, so it just runs inline. */
-    bson_status_t vst;
+    bson_status_t validate_status;
     if (len > GIL_RELEASE_THRESHOLD) {
         Py_BEGIN_ALLOW_THREADS
-        vst = bson_validate_document(buf, len, &err);
+        validate_status = bson_validate_document(buf, len, &err);
         Py_END_ALLOW_THREADS
     } else {
-        vst = bson_validate_document(buf, len, &err);
+        validate_status = bson_validate_document(buf, len, &err);
     }
-    if (vst != BSON_OK) {
+    if (validate_status != BSON_OK) {
         PyBuffer_Release(&view);
         bson_error_to_python(&err);
         return NULL;

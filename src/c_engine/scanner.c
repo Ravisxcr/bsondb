@@ -32,11 +32,11 @@ bool bson_scanner_next(bson_scanner_t *scanner, size_t *out_record_off, size_t *
         }
         uint8_t status = scanner->base[record_off];
 
-        bson_reader_t r;
-        bson_reader_init(&r, scanner->base + doc_off, scanner->data_end - doc_off);
+        bson_reader_t reader;
+        bson_reader_init(&reader, scanner->base + doc_off, scanner->data_end - doc_off);
         int32_t doc_len;
-        bson_status_t st = bson_reader_read_i32(&r, &doc_len);
-        if (st != BSON_OK || doc_len < BSON_DOC_MIN_LEN) {
+        bson_status_t read_status = bson_reader_read_i32(&reader, &doc_len);
+        if (read_status != BSON_OK || doc_len < BSON_DOC_MIN_LEN) {
             bson_error_set(err, BSON_ERR_INVALID_LENGTH, "scanner: invalid record length at offset %zu",
                             record_off);
             return false;

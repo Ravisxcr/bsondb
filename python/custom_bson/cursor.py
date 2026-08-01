@@ -11,12 +11,12 @@ def _normalize_projection(projection: Optional[ProjectionSpec]) -> Optional[Dict
     if projection is None:
         return None
     if isinstance(projection, Mapping):
-        spec = {k: bool(v) for k, v in projection.items()}
+        spec = {field: bool(include) for field, include in projection.items()}
     else:
-        spec = {k: True for k in projection}
+        spec = {field: True for field in projection}
 
-    include_keys = [k for k, v in spec.items() if v and k != "_id"]
-    exclude_keys = [k for k, v in spec.items() if not v and k != "_id"]
+    include_keys = [field for field, include in spec.items() if include and field != "_id"]
+    exclude_keys = [field for field, include in spec.items() if not include and field != "_id"]
     if include_keys and exclude_keys:
         raise ValueError("projection cannot mix inclusion and exclusion (except for '_id')")
     return spec
@@ -25,14 +25,14 @@ def _normalize_projection(projection: Optional[ProjectionSpec]) -> Optional[Dict
 def apply_projection(doc: Dict[str, Any], projection: Optional[Dict[str, bool]]) -> Dict[str, Any]:
     if not projection:
         return doc
-    include_keys = [k for k, v in projection.items() if v and k != "_id"]
+    include_keys = [field for field, include in projection.items() if include and field != "_id"]
     if include_keys:
-        result = {k: doc[k] for k in include_keys if k in doc}
+        result = {field: doc[field] for field in include_keys if field in doc}
         if projection.get("_id", True) and "_id" in doc:
             result["_id"] = doc["_id"]
         return result
-    exclude_keys = {k for k, v in projection.items() if not v}
-    return {k: v for k, v in doc.items() if k not in exclude_keys}
+    exclude_keys = {field for field, include in projection.items() if not include}
+    return {field: value for field, value in doc.items() if field not in exclude_keys}
 
 
 class Cursor:

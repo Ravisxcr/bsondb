@@ -57,10 +57,10 @@ static void set_win32_error(bson_error_t *err, bson_status_t code, const char *c
                              const char *path) {
     DWORD last = GetLastError();
     char msgbuf[256];
-    DWORD n = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, last,
+    DWORD msg_len = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, last,
                               MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), msgbuf, sizeof(msgbuf), NULL);
-    while (n > 0 && (msgbuf[n - 1] == '\n' || msgbuf[n - 1] == '\r')) msgbuf[--n] = '\0';
-    if (n == 0) msgbuf[0] = '\0';
+    while (msg_len > 0 && (msgbuf[msg_len - 1] == '\n' || msgbuf[msg_len - 1] == '\r')) msgbuf[--msg_len] = '\0';
+    if (msg_len == 0) msgbuf[0] = '\0';
     bson_error_set(err, code, "%s for '%s': %s (error %lu)", context, path, msgbuf,
                     (unsigned long)last);
 }
@@ -111,9 +111,9 @@ static bson_status_t map_current_handle(bson_mmap_file_t *file, size_t size, bso
 /* Grows/shrinks the underlying file. Caller must have unmapped any current
  * view first -- Windows refuses to resize a file with a live mapping. */
 static bson_status_t set_file_size(bson_mmap_file_t *file, size_t new_size, bson_error_t *err) {
-    LARGE_INTEGER li;
-    li.QuadPart = (LONGLONG)new_size;
-    if (!SetFilePointerEx(file->hFile, li, NULL, FILE_BEGIN)) {
+    LARGE_INTEGER file_offset;
+    file_offset.QuadPart = (LONGLONG)new_size;
+    if (!SetFilePointerEx(file->hFile, file_offset, NULL, FILE_BEGIN)) {
         set_win32_error(err, BSON_ERR_IO, "SetFilePointerEx failed", file->path);
         return BSON_ERR_IO;
     }
@@ -146,13 +146,13 @@ bson_status_t bson_mmap_open(const char *path, bson_mmap_mode_t mode, size_t ini
         return BSON_ERR_IO;
     }
 
-    LARGE_INTEGER liSize;
-    if (!GetFileSizeEx(hFile, &liSize)) {
+    LARGE_INTEGER queried_size;
+    if (!GetFileSizeEx(hFile, &queried_size)) {
         set_win32_error(err, BSON_ERR_IO, "GetFileSizeEx failed", path);
         CloseHandle(hFile);
         return BSON_ERR_IO;
     }
-    size_t file_size = (size_t)liSize.QuadPart;
+    size_t file_size = (size_t)queried_size.QuadPart;
 
     bson_mmap_file_t *file = (bson_mmap_file_t *)malloc(sizeof(bson_mmap_file_t));
     if (!file) {
@@ -174,22 +174,22 @@ bson_status_t bson_mmap_open(const char *path, bson_mmap_mode_t mode, size_t ini
     }
 
     if (mode == BSON_MMAP_READ_WRITE && initial_size > file_size) {
-        bson_status_t st = set_file_size(file, initial_size, err);
-        if (st != BSON_OK) {
+        bson_status_t status = set_file_size(file, initial_size, err);
+        if (status != BSON_OK) {
             CloseHandle(hFile);
             free(file->path);
             free(file);
-            return st;
+            return status;
         }
         file_size = initial_size;
     }
 
-    bson_status_t map_st = map_current_handle(file, file_size, err);
-    if (map_st != BSON_OK) {
+    bson_status_t map_status = map_current_handle(file, file_size, err);
+    if (map_status != BSON_OK) {
         CloseHandle(hFile);
         free(file->path);
         free(file);
-        return map_st;
+        return map_status;
     }
 
     *out_file = file;
@@ -228,8 +228,8 @@ bson_status_t bson_mmap_resize(bson_mmap_file_t *file, size_t new_size, bson_err
         return BSON_OK;
     }
     unmap_current_handle(file);
-    bson_status_t st = set_file_size(file, new_size, err);
-    if (st != BSON_OK) return st;
+    bson_status_t status = set_file_size(file, new_size, err);
+    if (status != BSON_OK) return status;
     return map_current_handle(file, new_size, err);
 }
 
@@ -306,14 +306,14 @@ bson_status_t bson_mmap_open(const char *path, bson_mmap_mode_t mode, size_t ini
         return BSON_ERR_IO;
     }
 
-    struct stat st;
-    if (fstat(fd, &st) != 0) {
+    struct stat file_stat;
+    if (fstat(fd, &file_stat) != 0) {
         bson_error_set(err, BSON_ERR_IO, "fstat failed for '%s': %s", path, strerror(errno));
         close(fd);
         return BSON_ERR_IO;
     }
 
-    size_t file_size = (size_t)st.st_size;
+    size_t file_size = (size_t)file_stat.st_size;
     if (mode == BSON_MMAP_READ_WRITE && initial_size > file_size) {
         if (ftruncate(fd, (off_t)initial_size) != 0) {
             bson_error_set(err, BSON_ERR_IO, "ftruncate failed for '%s': %s", path, strerror(errno));
@@ -341,12 +341,12 @@ bson_status_t bson_mmap_open(const char *path, bson_mmap_mode_t mode, size_t ini
         return BSON_ERR_OUT_OF_MEMORY;
     }
 
-    bson_status_t map_st = map_current_fd(file, file_size, err);
-    if (map_st != BSON_OK) {
+    bson_status_t map_status = map_current_fd(file, file_size, err);
+    if (map_status != BSON_OK) {
         close(fd);
         free(file->path);
         free(file);
-        return map_st;
+        return map_status;
     }
 
     *out_file = file;

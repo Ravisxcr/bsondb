@@ -19,38 +19,38 @@ struct bson_btree {
 
 /* ---- little-endian header/page field helpers (same pattern as storage.c) */
 
-static uint16_t read_u16(const uint8_t *p) {
-    uint16_t v;
-    memcpy(&v, p, 2);
+static uint16_t read_u16(const uint8_t *bytes) {
+    uint16_t value;
+    memcpy(&value, bytes, 2);
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    v = (uint16_t)((v >> 8) | (v << 8));
+    value = (uint16_t)((value >> 8) | (value << 8));
 #endif
-    return v;
+    return value;
 }
 
-static void write_u16(uint8_t *p, uint16_t v) {
+static void write_u16(uint8_t *bytes, uint16_t value) {
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    v = (uint16_t)((v >> 8) | (v << 8));
+    value = (uint16_t)((value >> 8) | (value << 8));
 #endif
-    memcpy(p, &v, 2);
+    memcpy(bytes, &value, 2);
 }
 
-static void write_u32(uint8_t *p, uint32_t v) {
-    uint32_t le = BSON_HOST_TO_LE32(v);
-    memcpy(p, &le, 4);
+static void write_u32(uint8_t *bytes, uint32_t value) {
+    uint32_t little_endian_value = BSON_HOST_TO_LE32(value);
+    memcpy(bytes, &little_endian_value, 4);
 }
 
-static uint64_t read_u64(const uint8_t *p) {
-    uint64_t v;
-    memcpy(&v, p, 8);
-    return bson_le64_to_host(v);
+static uint64_t read_u64(const uint8_t *bytes) {
+    uint64_t value;
+    memcpy(&value, bytes, 8);
+    return bson_le64_to_host(value);
 }
 
-static void write_u64(uint8_t *p, uint64_t v) {
-    uint64_t le = BSON_HOST_TO_LE64(v);
-    memcpy(p, &le, 8);
+static void write_u64(uint8_t *bytes, uint64_t value) {
+    uint64_t little_endian_value = BSON_HOST_TO_LE64(value);
+    memcpy(bytes, &little_endian_value, 8);
 }
 
 static uint8_t *mutable_base(bson_mmap_file_t *file) {
@@ -117,32 +117,32 @@ static uint8_t read_leaf_flags(const uint8_t *slot) {
  * Key comparison
  * ==================================================================== */
 
-int bson_btree_key_cmp(const uint8_t a[BSON_BTREE_KEY_SIZE], const uint8_t b[BSON_BTREE_KEY_SIZE]) {
-    if (a[0] != b[0]) return (int)a[0] - (int)b[0];
+int bson_btree_key_cmp(const uint8_t key_a[BSON_BTREE_KEY_SIZE], const uint8_t key_b[BSON_BTREE_KEY_SIZE]) {
+    if (key_a[0] != key_b[0]) return (int)key_a[0] - (int)key_b[0];
 
-    switch (a[0]) {
+    switch (key_a[0]) {
         case BSON_BTREE_TAG_NULL:
             return 0;
         case BSON_BTREE_TAG_BOOL:
-            return (int)a[1] - (int)b[1];
+            return (int)key_a[1] - (int)key_b[1];
         case BSON_BTREE_TAG_INT:
         case BSON_BTREE_TAG_DATETIME: {
-            int64_t va = (int64_t)read_u64(a + 1);
-            int64_t vb = (int64_t)read_u64(b + 1);
-            return va < vb ? -1 : (va > vb ? 1 : 0);
+            int64_t value_a = (int64_t)read_u64(key_a + 1);
+            int64_t value_b = (int64_t)read_u64(key_b + 1);
+            return value_a < value_b ? -1 : (value_a > value_b ? 1 : 0);
         }
         case BSON_BTREE_TAG_DOUBLE: {
-            uint64_t ra = read_u64(a + 1);
-            uint64_t rb = read_u64(b + 1);
-            double da, db;
-            memcpy(&da, &ra, 8);
-            memcpy(&db, &rb, 8);
-            return da < db ? -1 : (da > db ? 1 : 0);
+            uint64_t raw_a = read_u64(key_a + 1);
+            uint64_t raw_b = read_u64(key_b + 1);
+            double double_a, double_b;
+            memcpy(&double_a, &raw_a, 8);
+            memcpy(&double_b, &raw_b, 8);
+            return double_a < double_b ? -1 : (double_a > double_b ? 1 : 0);
         }
         case BSON_BTREE_TAG_OBJECTID:
-            return memcmp(a + 1, b + 1, 12);
+            return memcmp(key_a + 1, key_b + 1, 12);
         default:
-            return memcmp(a, b, BSON_BTREE_KEY_SIZE);
+            return memcmp(key_a, key_b, BSON_BTREE_KEY_SIZE);
     }
 }
 
@@ -171,8 +171,8 @@ static bson_status_t allocate_page(bson_btree_t *tree, uint64_t *out_page_no, bs
     uint64_t page_count = read_u64(base + OFF_PAGE_COUNT);
     uint64_t new_page_no = page_count + 1;
 
-    bson_status_t st = ensure_capacity_for_page(tree, new_page_no, err);
-    if (st != BSON_OK) return st;
+    bson_status_t status = ensure_capacity_for_page(tree, new_page_no, err);
+    if (status != BSON_OK) return status;
 
     base = mutable_base(tree->file); /* re-fetch: may have just resized */
     memset(page_ptr(tree, new_page_no), 0, BSON_BTREE_PAGE_SIZE);
@@ -193,8 +193,8 @@ bson_status_t bson_btree_create(const char *path, const char *field_path, uint8_
     }
 
     bson_mmap_file_t *file = NULL;
-    bson_status_t st = bson_mmap_open(path, BSON_MMAP_READ_WRITE, BSON_BTREE_PAGE_SIZE * 2, &file, err);
-    if (st != BSON_OK) return st;
+    bson_status_t status = bson_mmap_open(path, BSON_MMAP_READ_WRITE, BSON_BTREE_PAGE_SIZE * 2, &file, err);
+    if (status != BSON_OK) return status;
 
     bson_btree_t *tree = (bson_btree_t *)malloc(sizeof(bson_btree_t));
     if (!tree) {
@@ -223,12 +223,12 @@ bson_status_t bson_btree_create(const char *path, const char *field_path, uint8_
     memcpy(base + OFF_FIELD_PATH, field_path, field_len);
 
     uint64_t root;
-    st = allocate_page(tree, &root, err);
-    if (st != BSON_OK) {
+    status = allocate_page(tree, &root, err);
+    if (status != BSON_OK) {
         free(tree->field_path);
         bson_mmap_close(file, err);
         free(tree);
-        return st;
+        return status;
     }
     uint8_t *root_page = page_ptr(tree, root);
     root_page[PAGE_OFF_TYPE] = PAGE_TYPE_LEAF;
@@ -247,8 +247,8 @@ bson_status_t bson_btree_create(const char *path, const char *field_path, uint8_
 bson_status_t bson_btree_open(const char *path, bson_btree_t **out_tree, bson_error_t *err) {
     if (out_tree) *out_tree = NULL;
     bson_mmap_file_t *file = NULL;
-    bson_status_t st = bson_mmap_open(path, BSON_MMAP_READ_WRITE, 0, &file, err);
-    if (st != BSON_OK) return st;
+    bson_status_t status = bson_mmap_open(path, BSON_MMAP_READ_WRITE, 0, &file, err);
+    if (status != BSON_OK) return status;
 
     size_t size = bson_mmap_size(file);
     if (size < BSON_BTREE_HEADER_LEN) {
@@ -344,18 +344,18 @@ void bson_btree_offset_list_free(bson_btree_offset_list_t *list) {
     list->cap = 0;
 }
 
-static bson_status_t offset_list_push(bson_btree_offset_list_t *list, uint64_t v, bson_error_t *err) {
+static bson_status_t offset_list_push(bson_btree_offset_list_t *list, uint64_t value, bson_error_t *err) {
     if (list->len == list->cap) {
         size_t new_cap = list->cap == 0 ? 16 : list->cap * 2;
-        uint64_t *nd = (uint64_t *)realloc(list->data, new_cap * sizeof(uint64_t));
-        if (!nd) {
+        uint64_t *new_data = (uint64_t *)realloc(list->data, new_cap * sizeof(uint64_t));
+        if (!new_data) {
             bson_error_set(err, BSON_ERR_OUT_OF_MEMORY, "out of memory growing offset list");
             return BSON_ERR_OUT_OF_MEMORY;
         }
-        list->data = nd;
+        list->data = new_data;
         list->cap = new_cap;
     }
-    list->data[list->len++] = v;
+    list->data[list->len++] = value;
     return BSON_OK;
 }
 
@@ -393,10 +393,10 @@ static bool key_has_live_entry(bson_btree_t *tree, uint64_t leaf_no, const uint8
         uint8_t *page = page_ptr(tree, leaf_no);
         uint16_t count = read_u16(page + PAGE_OFF_COUNT);
         for (uint16_t i = 0; i < count; i++) {
-            uint8_t *e = leaf_entry_ptr(page, i);
-            int c = bson_btree_key_cmp(e, key);
-            if (c > 0) return false;
-            if (c == 0 && (read_leaf_flags(e) & LEAF_ENTRY_FLAG_DEAD) == 0) return true;
+            uint8_t *entry = leaf_entry_ptr(page, i);
+            int cmp = bson_btree_key_cmp(entry, key);
+            if (cmp > 0) return false;
+            if (cmp == 0 && (read_leaf_flags(entry) & LEAF_ENTRY_FLAG_DEAD) == 0) return true;
         }
         leaf_no = read_u64(page + PAGE_OFF_LINK);
     }
@@ -411,12 +411,12 @@ bson_status_t bson_btree_lookup(bson_btree_t *tree, const uint8_t key[BSON_BTREE
         uint8_t *page = page_ptr(tree, leaf_no);
         uint16_t count = read_u16(page + PAGE_OFF_COUNT);
         for (uint16_t i = 0; i < count; i++) {
-            uint8_t *e = leaf_entry_ptr(page, i);
-            int c = bson_btree_key_cmp(e, key);
-            if (c > 0) return BSON_OK; /* sorted order: no more matches anywhere */
-            if (c == 0 && (read_leaf_flags(e) & LEAF_ENTRY_FLAG_DEAD) == 0) {
-                bson_status_t st = offset_list_push(out, read_leaf_offset(e), err);
-                if (st != BSON_OK) return st;
+            uint8_t *entry = leaf_entry_ptr(page, i);
+            int cmp = bson_btree_key_cmp(entry, key);
+            if (cmp > 0) return BSON_OK; /* sorted order: no more matches anywhere */
+            if (cmp == 0 && (read_leaf_flags(entry) & LEAF_ENTRY_FLAG_DEAD) == 0) {
+                bson_status_t status = offset_list_push(out, read_leaf_offset(entry), err);
+                if (status != BSON_OK) return status;
             }
         }
         leaf_no = read_u64(page + PAGE_OFF_LINK);
@@ -435,18 +435,18 @@ bson_status_t bson_btree_range(bson_btree_t *tree, const uint8_t *low, bool low_
         uint8_t *page = page_ptr(tree, leaf_no);
         uint16_t count = read_u16(page + PAGE_OFF_COUNT);
         for (uint16_t i = 0; i < count; i++) {
-            uint8_t *e = leaf_entry_ptr(page, i);
+            uint8_t *entry = leaf_entry_ptr(page, i);
             if (low) {
-                int c = bson_btree_key_cmp(e, low);
-                if (c < 0 || (c == 0 && !low_inclusive)) continue;
+                int cmp = bson_btree_key_cmp(entry, low);
+                if (cmp < 0 || (cmp == 0 && !low_inclusive)) continue;
             }
             if (high) {
-                int c = bson_btree_key_cmp(e, high);
-                if (c > 0 || (c == 0 && !high_inclusive)) return BSON_OK;
+                int cmp = bson_btree_key_cmp(entry, high);
+                if (cmp > 0 || (cmp == 0 && !high_inclusive)) return BSON_OK;
             }
-            if ((read_leaf_flags(e) & LEAF_ENTRY_FLAG_DEAD) == 0) {
-                bson_status_t st = offset_list_push(out, read_leaf_offset(e), err);
-                if (st != BSON_OK) return st;
+            if ((read_leaf_flags(entry) & LEAF_ENTRY_FLAG_DEAD) == 0) {
+                bson_status_t status = offset_list_push(out, read_leaf_offset(entry), err);
+                if (status != BSON_OK) return status;
             }
         }
         leaf_no = read_u64(page + PAGE_OFF_LINK);
@@ -462,11 +462,11 @@ bson_status_t bson_btree_delete(bson_btree_t *tree, const uint8_t key[BSON_BTREE
         uint8_t *page = page_ptr(tree, leaf_no);
         uint16_t count = read_u16(page + PAGE_OFF_COUNT);
         for (uint16_t i = 0; i < count; i++) {
-            uint8_t *e = leaf_entry_ptr(page, i);
-            int c = bson_btree_key_cmp(e, key);
-            if (c > 0) return BSON_OK;
-            if (c == 0 && read_leaf_offset(e) == record_offset) {
-                e[BSON_BTREE_KEY_SIZE + 8] |= LEAF_ENTRY_FLAG_DEAD;
+            uint8_t *entry = leaf_entry_ptr(page, i);
+            int cmp = bson_btree_key_cmp(entry, key);
+            if (cmp > 0) return BSON_OK;
+            if (cmp == 0 && read_leaf_offset(entry) == record_offset) {
+                entry[BSON_BTREE_KEY_SIZE + 8] |= LEAF_ENTRY_FLAG_DEAD;
                 return BSON_OK;
             }
         }
@@ -523,10 +523,10 @@ static bson_status_t insert_recursive(bson_btree_t *tree, uint64_t page_no,
         uint16_t right_n = (uint16_t)(total - left_n);
 
         uint64_t new_page_no;
-        bson_status_t st = allocate_page(tree, &new_page_no, err);
-        if (st != BSON_OK) {
+        bson_status_t status = allocate_page(tree, &new_page_no, err);
+        if (status != BSON_OK) {
             *did_split = false;
-            return st;
+            return status;
         }
 
         page = page_ptr(tree, page_no); /* re-fetch: allocate_page may have resized */
@@ -553,9 +553,9 @@ static bson_status_t insert_recursive(bson_btree_t *tree, uint64_t page_no,
     /* Internal page: find the child to descend into. */
     uint16_t count = read_u16(page + PAGE_OFF_COUNT);
     uint64_t child = read_u64(page + PAGE_OFF_LINK);
-    uint16_t i;
-    for (i = 0; i < count; i++) {
-        uint8_t *entry = internal_entry_ptr(page, i);
+    uint16_t child_index;
+    for (child_index = 0; child_index < count; child_index++) {
+        uint8_t *entry = internal_entry_ptr(page, child_index);
         if (bson_btree_key_cmp(key, entry) < 0) break;
         child = read_u64(entry + BSON_BTREE_KEY_SIZE);
     }
@@ -563,11 +563,11 @@ static bson_status_t insert_recursive(bson_btree_t *tree, uint64_t page_no,
     uint8_t child_split_key[BSON_BTREE_KEY_SIZE];
     uint64_t child_split_page = 0;
     bool child_did_split = false;
-    bson_status_t st = insert_recursive(tree, child, key, offset, unique, child_split_key,
+    bson_status_t status = insert_recursive(tree, child, key, offset, unique, child_split_key,
                                          &child_split_page, &child_did_split, err);
-    if (st != BSON_OK) {
+    if (status != BSON_OK) {
         *did_split = false;
-        return st;
+        return status;
     }
     if (!child_did_split) {
         *did_split = false;
@@ -575,15 +575,16 @@ static bson_status_t insert_recursive(bson_btree_t *tree, uint64_t page_no,
         return BSON_OK;
     }
 
-    /* Insert (child_split_key, child_split_page) at index i. Re-fetch:
-     * the child's recursion may have allocated pages and resized. */
+    /* Insert (child_split_key, child_split_page) at index child_index.
+     * Re-fetch: the child's recursion may have allocated pages and
+     * resized. */
     page = page_ptr(tree, page_no);
     count = read_u16(page + PAGE_OFF_COUNT);
 
     if (count < INTERNAL_MAX_KEYS) {
-        memmove(internal_entry_ptr(page, i + 1), internal_entry_ptr(page, i),
-                (size_t)(count - i) * INTERNAL_ENTRY_LEN);
-        uint8_t *slot = internal_entry_ptr(page, i);
+        memmove(internal_entry_ptr(page, child_index + 1), internal_entry_ptr(page, child_index),
+                (size_t)(count - child_index) * INTERNAL_ENTRY_LEN);
+        uint8_t *slot = internal_entry_ptr(page, child_index);
         memcpy(slot, child_split_key, BSON_BTREE_KEY_SIZE);
         write_u64(slot + BSON_BTREE_KEY_SIZE, child_split_page);
         write_u16(page + PAGE_OFF_COUNT, count + 1);
@@ -599,14 +600,14 @@ static bson_status_t insert_recursive(bson_btree_t *tree, uint64_t page_no,
      * the right half). */
     uint64_t leftmost = read_u64(page + PAGE_OFF_LINK);
     uint8_t tmp[(INTERNAL_MAX_KEYS + 1) * INTERNAL_ENTRY_LEN];
-    memcpy(tmp, internal_entry_ptr(page, 0), (size_t)i * INTERNAL_ENTRY_LEN);
+    memcpy(tmp, internal_entry_ptr(page, 0), (size_t)child_index * INTERNAL_ENTRY_LEN);
     {
-        uint8_t *slot = tmp + (size_t)i * INTERNAL_ENTRY_LEN;
+        uint8_t *slot = tmp + (size_t)child_index * INTERNAL_ENTRY_LEN;
         memcpy(slot, child_split_key, BSON_BTREE_KEY_SIZE);
         write_u64(slot + BSON_BTREE_KEY_SIZE, child_split_page);
     }
-    memcpy(tmp + (size_t)(i + 1) * INTERNAL_ENTRY_LEN, internal_entry_ptr(page, i),
-           (size_t)(count - i) * INTERNAL_ENTRY_LEN);
+    memcpy(tmp + (size_t)(child_index + 1) * INTERNAL_ENTRY_LEN, internal_entry_ptr(page, child_index),
+           (size_t)(count - child_index) * INTERNAL_ENTRY_LEN);
 
     uint16_t total = (uint16_t)(count + 1);
     uint16_t mid = (uint16_t)(total / 2);
@@ -614,10 +615,10 @@ static bson_status_t insert_recursive(bson_btree_t *tree, uint64_t page_no,
     uint16_t right_n = (uint16_t)(total - mid - 1);
 
     uint64_t new_page_no;
-    st = allocate_page(tree, &new_page_no, err);
-    if (st != BSON_OK) {
+    status = allocate_page(tree, &new_page_no, err);
+    if (status != BSON_OK) {
         *did_split = false;
-        return st;
+        return status;
     }
 
     page = page_ptr(tree, page_no); /* re-fetch after allocate_page's possible resize */
@@ -649,14 +650,14 @@ bson_status_t bson_btree_insert(bson_btree_t *tree, const uint8_t key[BSON_BTREE
     uint8_t split_key[BSON_BTREE_KEY_SIZE];
     uint64_t split_page = 0;
     bool did_split = false;
-    bson_status_t st =
+    bson_status_t status =
         insert_recursive(tree, root, key, record_offset, unique, split_key, &split_page, &did_split, err);
-    if (st != BSON_OK) return st;
+    if (status != BSON_OK) return status;
 
     if (did_split) {
         uint64_t new_root;
-        st = allocate_page(tree, &new_root, err);
-        if (st != BSON_OK) return st;
+        status = allocate_page(tree, &new_root, err);
+        if (status != BSON_OK) return status;
 
         uint8_t *new_root_page = page_ptr(tree, new_root);
         new_root_page[PAGE_OFF_TYPE] = PAGE_TYPE_INTERNAL;

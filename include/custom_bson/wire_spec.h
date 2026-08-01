@@ -86,33 +86,33 @@ extern "C" {
  * without a redesign.
  */
 
-static inline uint32_t bson_le32_to_host(uint32_t v) {
+static inline uint32_t bson_le32_to_host(uint32_t value) {
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return (uint32_t)((v >> 24) | ((v >> 8) & 0x0000FF00u) |
-                       ((v << 8) & 0x00FF0000u) | (v << 24));
+    return (uint32_t)((value >> 24) | ((value >> 8) & 0x0000FF00u) |
+                       ((value << 8) & 0x00FF0000u) | (value << 24));
 #else
-    return v;
+    return value;
 #endif
 }
 
-static inline uint64_t bson_le64_to_host(uint64_t v) {
+static inline uint64_t bson_le64_to_host(uint64_t value) {
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return (uint64_t)((v >> 56) | ((v >> 40) & 0x000000000000FF00ull) |
-                       ((v >> 24) & 0x0000000000FF0000ull) |
-                       ((v >> 8)  & 0x00000000FF000000ull) |
-                       ((v << 8)  & 0x000000FF00000000ull) |
-                       ((v << 24) & 0x0000FF0000000000ull) |
-                       ((v << 40) & 0x00FF000000000000ull) |
-                       (v << 56));
+    return (uint64_t)((value >> 56) | ((value >> 40) & 0x000000000000FF00ull) |
+                       ((value >> 24) & 0x0000000000FF0000ull) |
+                       ((value >> 8)  & 0x00000000FF000000ull) |
+                       ((value << 8)  & 0x000000FF00000000ull) |
+                       ((value << 24) & 0x0000FF0000000000ull) |
+                       ((value << 40) & 0x00FF000000000000ull) |
+                       (value << 56));
 #else
-    return v;
+    return value;
 #endif
 }
 
-#define BSON_HOST_TO_LE32(v) bson_le32_to_host((uint32_t)(v))
-#define BSON_HOST_TO_LE64(v) bson_le64_to_host((uint64_t)(v))
+#define BSON_HOST_TO_LE32(value) bson_le32_to_host((uint32_t)(value))
+#define BSON_HOST_TO_LE64(value) bson_le64_to_host((uint64_t)(value))
 
 #ifdef __cplusplus
 }

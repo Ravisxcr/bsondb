@@ -42,17 +42,17 @@ def resolve_path(value: Any, segments: Sequence[str]) -> List[Any]:
             return [value, *value]
         return [value]
 
-    seg, rest = segments[0], segments[1:]
+    segment, rest = segments[0], segments[1:]
 
     if isinstance(value, dict):
-        if seg in value:
-            return resolve_path(value[seg], rest)
+        if segment in value:
+            return resolve_path(value[segment], rest)
         return []
 
     if isinstance(value, list):
         candidates: List[Any] = []
-        if seg.lstrip("-").isdigit():
-            idx = int(seg)
+        if segment.lstrip("-").isdigit():
+            idx = int(segment)
             if -len(value) <= idx < len(value):
                 candidates.extend(resolve_path(value[idx], rest))
         for elem in value:
@@ -62,13 +62,13 @@ def resolve_path(value: Any, segments: Sequence[str]) -> List[Any]:
     return []
 
 
-def _values_equal(a: Any, b: Any) -> bool:
+def _values_equal(value_a: Any, value_b: Any) -> bool:
     # bool is an int subclass in Python; BSON keeps them distinct types,
     # so True must not equal 1 here the way it would with bare `==`.
-    if isinstance(a, bool) != isinstance(b, bool):
+    if isinstance(value_a, bool) != isinstance(value_b, bool):
         return False
     try:
-        return a == b
+        return value_a == value_b
     except TypeError:
         return False
 
@@ -78,15 +78,15 @@ def _matches_eq(candidates: List[Any], operand: Any) -> bool:
         # Querying null also matches a missing field (matches MongoDB's
         # documented behavior).
         return True
-    return any(_values_equal(c, operand) for c in candidates)
+    return any(_values_equal(candidate, operand) for candidate in candidates)
 
 
 def _matches_compare(candidates: List[Any], operand: Any, func) -> bool:
-    for c in candidates:
-        if isinstance(c, bool) or isinstance(operand, bool):
+    for candidate in candidates:
+        if isinstance(candidate, bool) or isinstance(operand, bool):
             continue  # booleans have no meaningful ordering here
         try:
-            if func(c, operand):
+            if func(candidate, operand):
                 return True
         except TypeError:
             continue  # cross-type comparison: treat as non-matching, not an error
@@ -96,11 +96,11 @@ def _matches_compare(candidates: List[Any], operand: Any, func) -> bool:
 def _matches_in(candidates: List[Any], operand: Any) -> bool:
     if not isinstance(operand, (list, tuple)):
         raise InvalidDocument("$in/$nin operand must be a list")
-    return any(_matches_eq(candidates, v) for v in operand)
+    return any(_matches_eq(candidates, candidate_value) for candidate_value in operand)
 
 
 def _field_matches(candidates: List[Any], condition: Any) -> bool:
-    if isinstance(condition, dict) and condition and all(k.startswith("$") for k in condition):
+    if isinstance(condition, dict) and condition and all(key.startswith("$") for key in condition):
         for op, operand in condition.items():
             if op == "$eq":
                 ok = _matches_eq(candidates, operand)
@@ -179,32 +179,32 @@ def validate_update_document(update: Mapping[str, Any]) -> None:
 def _set_path(doc: Dict[str, Any], path: str, value: Any) -> None:
     segments = path.split(".")
     cursor = doc
-    for seg in segments[:-1]:
-        nxt = cursor.get(seg)
-        if not isinstance(nxt, dict):
-            nxt = {}
-            cursor[seg] = nxt
-        cursor = nxt
+    for segment in segments[:-1]:
+        next_value = cursor.get(segment)
+        if not isinstance(next_value, dict):
+            next_value = {}
+            cursor[segment] = next_value
+        cursor = next_value
     cursor[segments[-1]] = value
 
 
 def _unset_path(doc: Dict[str, Any], path: str) -> None:
     segments = path.split(".")
     cursor = doc
-    for seg in segments[:-1]:
-        nxt = cursor.get(seg)
-        if not isinstance(nxt, dict):
+    for segment in segments[:-1]:
+        next_value = cursor.get(segment)
+        if not isinstance(next_value, dict):
             return  # path doesn't exist -- no-op, matches Mongo's $unset semantics
-        cursor = nxt
+        cursor = next_value
     cursor.pop(segments[-1], None)
 
 
 def _get_path(doc: Any, path: str) -> Any:
     cursor = doc
-    for seg in path.split("."):
-        if not isinstance(cursor, dict) or seg not in cursor:
+    for segment in path.split("."):
+        if not isinstance(cursor, dict) or segment not in cursor:
             return _MISSING
-        cursor = cursor[seg]
+        cursor = cursor[segment]
     return cursor
 
 
