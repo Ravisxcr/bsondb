@@ -11,7 +11,7 @@ There is no network protocol and no real `mongod` involved —
 memory-mapped files on disk.
 
 - **License:** MIT
-- **Python:** 3.9+
+- **Python:** 3.10+
 - **Dependencies:** none (stdlib + native extension only)
 
 ## Table of contents
