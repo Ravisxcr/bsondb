@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bsondb"
+version = "0.0.1"
+description = "Embedded, file-backed document database with a PyMongo-like local API, built on a native BSON engine."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["database", "bson", "embedded-database", "document-database", "mongodb", "pymongo"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: C",
+    "Operating System :: OS Independent",
+    "Topic :: Database",
+    "Topic :: Database :: Database Engines/Servers",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ravisxcr/bsondb"
+Repository = "https://github.com/Ravisxcr/bsondb"
+Issues = "https://github.com/Ravisxcr/bsondb/issues"
+Documentation = "https://github.com/Ravisxcr/bsondb/tree/main/docs"
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools]
+package-dir = { "" = "python" }
+packages = ["bsondb"]
+
+[tool.setuptools.package-data]
+bsondb = ["py.typed", "*.pyi"]
+
+[tool.cibuildwheel]
+build = "cp310-* cp311-* cp312-* cp313-*"
+skip = "*-musllinux* *-win32 *_i686"
+test-command = "python -m pytest {project}/tests/python_tests -q"
+test-requires = "pytest"
