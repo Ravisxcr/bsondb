@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bsondb"
-version = "0.1.0"
+version = "0.0.1"
 description = "Embedded, file-backed document database with a PyMongo-like local API, built on a native BSON engine."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]

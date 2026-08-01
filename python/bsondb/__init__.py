@@ -40,7 +40,7 @@ from .collection import Collection
 from .cursor import Cursor
 from .results import DeleteResult, InsertManyResult, InsertOneResult, UpdateResult
 
-__version__ = "0.1.0"
+__version__ = "0.0.1"
 
 __all__ = [
     "encode",
