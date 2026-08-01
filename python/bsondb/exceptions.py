@@ -1,11 +1,11 @@
-"""Exception hierarchy raised by jsondb's encode/decode engine and
+"""Exception hierarchy raised by bsondb's encode/decode engine and
 storage/query layer."""
 
 from __future__ import annotations
 
 
 class BSONError(Exception):
-    """Base class for all jsondb errors."""
+    """Base class for all bsondb errors."""
 
 
 class InvalidBSON(BSONError):

@@ -1,8 +1,8 @@
 """Database: a named group of collections, backed by a directory on disk.
 
 A Database's on-disk presence is just its subdirectory under the
-JsonDBClient's data directory (``<client.path>/<db_name>/``); the
-directory itself is created lazily by JsonDBClient._get_handle() on
+BsonDBClient's data directory (``<client.path>/<db_name>/``); the
+directory itself is created lazily by BsonDBClient._get_handle() on
 first collection access, not here.
 """
 
@@ -14,7 +14,7 @@ from .collection import Collection
 
 
 class Database:
-    """A named database within a :class:`~jsondb.client.JsonDBClient`."""
+    """A named database within a :class:`~bsondb.client.BsonDBClient`."""
 
     def __init__(self, client: Any, name: str) -> None:
         self._client = client

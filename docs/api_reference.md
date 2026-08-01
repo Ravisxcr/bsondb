@@ -1,28 +1,28 @@
 ﻿# API reference
 
-## `jsondb.encode(document: dict) -> bytes`
+## `bsondb.encode(document: dict) -> bytes`
 
 Serializes a Python `dict` to BSON bytes. Raises:
 
 - `TypeError` -- `document` is not a `dict`.
-- `jsondb.InvalidDocument` -- a key is not `str` (or contains an
+- `bsondb.InvalidDocument` -- a key is not `str` (or contains an
   embedded NUL byte), or a value has no BSON representation (see the
   type table below).
 - `OverflowError` -- an `int` value doesn't fit in a signed 64-bit BSON int.
-- `jsondb.DocumentTooLarge` -- the encoded document would exceed 16 MiB.
+- `bsondb.DocumentTooLarge` -- the encoded document would exceed 16 MiB.
 - `MemoryError` -- allocation failure.
 
-## `jsondb.decode(data: bytes) -> dict`
+## `bsondb.decode(data: bytes) -> dict`
 
 Deserializes BSON bytes back to a Python `dict`. Accepts anything
 implementing the buffer protocol (`bytes`, `bytearray`, `memoryview`).
 Raises:
 
-- `jsondb.InvalidBSON` -- the bytes are truncated, malformed, or
+- `bsondb.InvalidBSON` -- the bytes are truncated, malformed, or
   otherwise corrupt (bad length field, invalid type byte, unterminated
   string, invalid UTF-8, trailing bytes after the document, missing
   end-of-object byte, or nesting deeper than 100 levels).
-- `jsondb.BSONNotImplementedError` -- the document contains a
+- `bsondb.BSONNotImplementedError` -- the document contains a
   structurally valid BSON type this version doesn't support yet
   (Regex, Timestamp, Decimal128, MinKey/MaxKey, or a deprecated type).
 - `MemoryError` -- allocation failure.
@@ -34,10 +34,10 @@ holds the GIL throughout, since its recursive walk touches Python
 objects at effectively every step -- there's no extended pure-buffer
 phase to release around, unlike decode's validation pass.
 
-## `jsondb.ObjectId`
+## `bsondb.ObjectId`
 
 A 12-byte unique identifier, matching MongoDB/BSON's ObjectId format.
-Pure Python (`python/jsondb/object_id.py`) -- see the module
+Pure Python (`python/bsondb/object_id.py`) -- see the module
 docstring for why this isn't implemented in C.
 
 ```python
@@ -53,7 +53,7 @@ str(oid)             # -> 24-char hex string
 Supports equality, hashing, and ordering (`<`, `<=`, `>`, `>=`) by raw
 byte value.
 
-## `jsondb.exceptions`
+## `bsondb.exceptions`
 
 ```
 BSONError
@@ -75,18 +75,18 @@ BSONError
 | `int` | Int32 or Int64 | chosen by magnitude; `OverflowError` if it doesn't fit in 64 bits |
 | `float` | Double | raw IEEE-754 bits preserved, including `nan`/`inf` |
 | `None` | Null | |
-| `jsondb.ObjectId` | ObjectId | |
+| `bsondb.ObjectId` | ObjectId | |
 | `datetime.datetime` | UTC datetime | naive datetimes are treated as already-UTC; decode always returns naive datetimes |
 
-## `jsondb.JsonDBClient` / `Database` / `Collection`
+## `bsondb.BsonDBClient` / `Database` / `Collection`
 
 ```python
-client = jsondb.JsonDBClient("./data")   # local data directory, not a network connection; creates it if missing
+client = bsondb.BsonDBClient("./data")   # local data directory, not a network connection; creates it if missing
 db = client.mydb                              # -> Database (a subdirectory of client.path)
 coll = db.mycollection                        # -> Collection (one <name>.cbd mmap'd data file)
 ```
 
-`JsonDBClient(path)` creates `path` eagerly (there's no server to defer
+`BsonDBClient(path)` creates `path` eagerly (there's no server to defer
 that to in an embedded model). `client.close()` flushes and closes
 every open collection and index file handle. No multi-process locking:
 this is a single-process embedded database, like SQLite's default
@@ -137,7 +137,7 @@ modifier: `{"field": {"$not": {...}}}`, not a top-level combinator).
 No `$regex`/`$elemMatch`/array operators.
 
 Filter/update evaluation runs on a decoded Python `dict`
-(`jsondb.decode()` + `python/jsondb/query.py`'s `matches()`),
+(`bsondb.decode()` + `python/bsondb/query.py`'s `matches()`),
 not as a raw-BSON predicate pushdown -- see `query.py`'s module
 docstring for why. A B-Tree index (below) narrows candidates for
 eligible filters; the full filter is always re-evaluated against every

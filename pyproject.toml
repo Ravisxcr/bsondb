@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jsondb"
+name = "bsondb"
 version = "0.1.0"
 description = "Embedded, file-backed document database with a PyMongo-like local API, built on a native BSON engine."
 readme = "README.md"
@@ -16,7 +16,7 @@ dev = ["pytest>=7"]
 
 [tool.setuptools]
 package-dir = { "" = "python" }
-packages = ["jsondb"]
+packages = ["bsondb"]
 
 [tool.setuptools.package-data]
-jsondb = ["py.typed", "*.pyi"]
+bsondb = ["py.typed", "*.pyi"]

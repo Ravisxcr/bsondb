@@ -58,7 +58,7 @@ def _replacement_with_preserved_id(
 
 
 class Collection:
-    """A named collection of documents within a :class:`~jsondb.database.Database`."""
+    """A named collection of documents within a :class:`~bsondb.database.Database`."""
 
     def __init__(self, database: Any, name: str) -> None:
         self._database = database

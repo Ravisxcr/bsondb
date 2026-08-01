@@ -1,7 +1,7 @@
-"""JsonDBClient: a local facade over BSON documents stored on disk.
+"""BsonDBClient: a local facade over BSON documents stored on disk.
 
-jsondb is an embedded, file-backed document database, not a
-network client -- there is no real ``mongod`` involved. JsonDBClient
+bsondb is an embedded, file-backed document database, not a
+network client -- there is no real ``mongod`` involved. BsonDBClient
 manages a local data directory: one subdirectory per database, one
 ``<collection>.cbd`` memory-mapped file per collection, and any number
 of ``<collection>.<index_name>.bidx`` B-Tree index files alongside it
@@ -27,7 +27,7 @@ from . import _storage_core
 from .database import Database
 
 
-class JsonDBClient:
+class BsonDBClient:
     """Entry point for the embedded database, rooted at a local directory."""
 
     def __init__(self, path: Union[str, "os.PathLike[str]"] = "./data") -> None:
@@ -148,4 +148,4 @@ class JsonDBClient:
         self._index_handles.clear()
 
     def __repr__(self) -> str:
-        return f"JsonDBClient({self._path!r})"
+        return f"BsonDBClient({self._path!r})"

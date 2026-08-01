@@ -744,7 +744,7 @@ PyMODINIT_FUNC PyInit__bson_core(void) {
         return NULL;
     }
 
-    PyObject *oid_mod = PyImport_ImportModule("jsondb.object_id");
+    PyObject *oid_mod = PyImport_ImportModule("bsondb.object_id");
     if (!oid_mod) {
         Py_DECREF(m);
         return NULL;
@@ -756,7 +756,7 @@ PyMODINIT_FUNC PyInit__bson_core(void) {
         return NULL;
     }
 
-    PyObject *exc_mod = PyImport_ImportModule("jsondb.exceptions");
+    PyObject *exc_mod = PyImport_ImportModule("bsondb.exceptions");
     if (!exc_mod) {
         Py_DECREF(m);
         return NULL;

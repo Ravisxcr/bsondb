@@ -1,4 +1,4 @@
-﻿"""Tests for jsondb.encode / jsondb.decode.
+﻿"""Tests for bsondb.encode / bsondb.decode.
 
 Covers round-trip correctness for every implemented BSON type, growth
 paths (large strings/arrays, deep nesting), and -- since decode treats
@@ -15,9 +15,9 @@ import struct
 
 import pytest
 
-import jsondb
-from jsondb import ObjectId
-from jsondb.exceptions import BSONError, DocumentTooLarge, InvalidBSON, InvalidDocument
+import bsondb
+from bsondb import ObjectId
+from bsondb.exceptions import BSONError, DocumentTooLarge, InvalidBSON, InvalidDocument
 
 
 # ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ from jsondb.exceptions import BSONError, DocumentTooLarge, InvalidBSON, InvalidD
 
 
 def roundtrip(doc: dict) -> dict:
-    return jsondb.decode(jsondb.encode(doc))
+    return bsondb.decode(bsondb.encode(doc))
 
 
 def test_empty_document():
@@ -43,9 +43,9 @@ def test_int_roundtrip(value):
 
 def test_int_out_of_range_raises_overflow():
     with pytest.raises(OverflowError):
-        jsondb.encode({"v": 2**63})
+        bsondb.encode({"v": 2**63})
     with pytest.raises(OverflowError):
-        jsondb.encode({"v": -(2**63) - 1})
+        bsondb.encode({"v": -(2**63) - 1})
 
 
 @pytest.mark.parametrize("value", [0.0, -0.0, 1.5, -1.5, 1e300, -1e-300])
@@ -138,7 +138,7 @@ def test_list_variants():
 
 
 def test_tuple_encodes_as_list():
-    out = jsondb.decode(jsondb.encode({"v": (1, 2, 3)}))
+    out = bsondb.decode(bsondb.encode({"v": (1, 2, 3)}))
     assert out == {"v": [1, 2, 3]}
 
 
@@ -175,13 +175,13 @@ def test_deep_nesting_beyond_limit_raises():
         cursor = cursor["n"]
     cursor["leaf"] = 1
     with pytest.raises(BSONError):
-        jsondb.encode(doc)
+        bsondb.encode(doc)
 
 
 def test_encode_decode_encode_idempotent():
     doc = {"a": 1, "b": [1, 2, {"c": "d"}], "e": None, "f": 1.5}
-    once = jsondb.encode(doc)
-    twice = jsondb.encode(jsondb.decode(once))
+    once = bsondb.encode(doc)
+    twice = bsondb.encode(bsondb.decode(once))
     assert once == twice
 
 
@@ -203,23 +203,23 @@ def test_decode_returns_plain_dict():
 
 def test_encode_requires_dict():
     with pytest.raises(TypeError):
-        jsondb.encode([1, 2, 3])
+        bsondb.encode([1, 2, 3])
 
 
 def test_encode_non_str_key_raises():
     with pytest.raises(InvalidDocument):
-        jsondb.encode({1: "a"})
+        bsondb.encode({1: "a"})
 
 
 def test_encode_embedded_nul_key_raises():
     with pytest.raises(InvalidDocument):
-        jsondb.encode({"a\x00b": 1})
+        bsondb.encode({"a\x00b": 1})
 
 
 @pytest.mark.parametrize("value", [set(), object(), 1 + 2j, {"a", "b"}])
 def test_encode_unsupported_type_raises(value):
     with pytest.raises(InvalidDocument):
-        jsondb.encode({"v": value})
+        bsondb.encode({"v": value})
 
 
 # ---------------------------------------------------------------------------
@@ -229,36 +229,36 @@ def test_encode_unsupported_type_raises(value):
 
 def test_decode_empty_bytes():
     with pytest.raises(InvalidBSON):
-        jsondb.decode(b"")
+        bsondb.decode(b"")
 
 
 @pytest.mark.parametrize("n", [1, 2, 3])
 def test_decode_truncated_length_header(n):
     with pytest.raises(InvalidBSON):
-        jsondb.decode(b"\x00" * n)
+        bsondb.decode(b"\x00" * n)
 
 
 def test_decode_length_shorter_than_minimum():
     with pytest.raises(InvalidBSON):
-        jsondb.decode(struct.pack("<i", 4) + b"\x00")
+        bsondb.decode(struct.pack("<i", 4) + b"\x00")
 
 
 def test_decode_length_exceeds_buffer():
     with pytest.raises(InvalidBSON):
-        jsondb.decode(struct.pack("<i", 100) + b"\x00" * 4)
+        bsondb.decode(struct.pack("<i", 100) + b"\x00" * 4)
 
 
 def test_decode_length_overflow_attempt():
     with pytest.raises(InvalidBSON):
-        jsondb.decode(struct.pack("<i", -1) + b"\x00" * 8)
+        bsondb.decode(struct.pack("<i", -1) + b"\x00" * 8)
     with pytest.raises(InvalidBSON):
-        jsondb.decode(struct.pack("<I", 0xFFFFFFFF) + b"\x00" * 8)
+        bsondb.decode(struct.pack("<I", 0xFFFFFFFF) + b"\x00" * 8)
 
 
 def test_decode_missing_terminator():
     # length=5 (minimum) but the byte at the end isn't 0x00
     with pytest.raises(InvalidBSON):
-        jsondb.decode(struct.pack("<i", 5) + b"\x01")
+        bsondb.decode(struct.pack("<i", 5) + b"\x01")
 
 
 def test_decode_unknown_type_byte():
@@ -267,7 +267,7 @@ def test_decode_unknown_type_byte():
     total_len = 4 + len(body) + 1
     data = struct.pack("<i", total_len) + body + b"\x00"
     with pytest.raises(InvalidBSON):
-        jsondb.decode(data)
+        bsondb.decode(data)
 
 
 def test_decode_unterminated_key():
@@ -275,7 +275,7 @@ def test_decode_unterminated_key():
     total_len = 4 + len(body) + 1
     data = struct.pack("<i", total_len) + body + b"\x00"
     with pytest.raises(InvalidBSON):
-        jsondb.decode(data)
+        bsondb.decode(data)
 
 
 def test_decode_string_length_past_buffer():
@@ -284,7 +284,7 @@ def test_decode_string_length_past_buffer():
     total_len = 4 + len(body) + 1
     data = struct.pack("<i", total_len) + body + b"\x00"
     with pytest.raises(InvalidBSON):
-        jsondb.decode(data)
+        bsondb.decode(data)
 
 
 def test_decode_invalid_utf8():
@@ -293,7 +293,7 @@ def test_decode_invalid_utf8():
     total_len = 4 + len(body) + 1
     data = struct.pack("<i", total_len) + body + b"\x00"
     with pytest.raises(InvalidBSON):
-        jsondb.decode(data)
+        bsondb.decode(data)
 
 
 def test_decode_binary_negative_length():
@@ -301,7 +301,7 @@ def test_decode_binary_negative_length():
     total_len = 4 + len(body) + 1
     data = struct.pack("<i", total_len) + body + b"\x00"
     with pytest.raises(InvalidBSON):
-        jsondb.decode(data)
+        bsondb.decode(data)
 
 
 def test_decode_nested_document_exceeds_container():
@@ -312,20 +312,20 @@ def test_decode_nested_document_exceeds_container():
     total_len = 4 + len(body) + 1
     data = struct.pack("<i", total_len) + body + b"\x00"
     with pytest.raises(InvalidBSON):
-        jsondb.decode(data)
+        bsondb.decode(data)
 
 
 def test_decode_trailing_bytes():
-    valid = jsondb.encode({"a": 1})
+    valid = bsondb.encode({"a": 1})
     with pytest.raises(InvalidBSON):
-        jsondb.decode(valid + b"\x00\x01\x02")
+        bsondb.decode(valid + b"\x00\x01\x02")
 
 
 def test_decode_document_too_large_declared_length():
     over_limit = 16 * 1024 * 1024 + 1
     data = struct.pack("<i", over_limit) + b"\x00" * 100
     with pytest.raises(BSONError):
-        jsondb.decode(data)
+        bsondb.decode(data)
 
 
 def test_decode_random_fuzz_never_crashes():
@@ -334,7 +334,7 @@ def test_decode_random_fuzz_never_crashes():
         length = rng.randint(0, 64)
         blob = bytes(rng.getrandbits(8) for _ in range(length))
         try:
-            jsondb.decode(blob)
+            bsondb.decode(blob)
         except BSONError:
             pass  # expected for almost all random input
         except Exception as exc:  # pragma: no cover - failure path
@@ -352,13 +352,13 @@ def test_decode_fuzz_of_valid_documents():
         {"_id": ObjectId(), "v": 3.14},
     ]
     for doc in base_docs:
-        original = jsondb.encode(doc)
+        original = bsondb.encode(doc)
         for _ in range(50):
             mutated = bytearray(original)
             idx = rng.randrange(len(mutated))
             mutated[idx] = rng.randrange(256)
             try:
-                jsondb.decode(bytes(mutated))
+                bsondb.decode(bytes(mutated))
             except BSONError:
                 pass
             except Exception as exc:  # pragma: no cover - failure path
@@ -369,13 +369,13 @@ def test_decode_large_buffer_gil_release_path_still_validates():
     # Exceeds the GIL-release threshold in _bson_core.c; must still
     # detect corruption (trailing bytes) correctly.
     big_doc = {"v": "x" * 10_000}
-    valid = jsondb.encode(big_doc)
+    valid = bsondb.encode(big_doc)
     assert roundtrip(big_doc) == big_doc
     with pytest.raises(InvalidBSON):
-        jsondb.decode(valid + b"\xff")
+        bsondb.decode(valid + b"\xff")
 
 
 def test_decode_accepts_bytearray_and_memoryview():
-    data = jsondb.encode({"a": 1})
-    assert jsondb.decode(bytearray(data)) == {"a": 1}
-    assert jsondb.decode(memoryview(data)) == {"a": 1}
+    data = bsondb.encode({"a": 1})
+    assert bsondb.decode(bytearray(data)) == {"a": 1}
+    assert bsondb.decode(memoryview(data)) == {"a": 1}
