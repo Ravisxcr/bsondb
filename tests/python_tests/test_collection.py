@@ -1,4 +1,4 @@
-"""Tests for the full Collection API: insert_one/insert_many, find_one/
+﻿"""Tests for the full Collection API: insert_one/insert_many, find_one/
 find (filtering, dot-notation, comparison/logical operators,
 projection, skip/limit), delete_one/delete_many, update_one/
 update_many ($set/$unset/$inc, upsert), replace_one, find_one_and_
@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import pytest
 
-import custom_bson
-from custom_bson import InsertOneResult, ObjectId
-from custom_bson.exceptions import InvalidDocument
+import jsondb
+from jsondb import InsertOneResult, ObjectId
+from jsondb.exceptions import InvalidDocument
 
 
 @pytest.fixture()
 def client(tmp_path):
-    c = custom_bson.MongoClient(str(tmp_path / "data"))
+    c = jsondb.JsonDBClient(str(tmp_path / "data"))
     yield c
     c.close()
 
@@ -256,7 +256,7 @@ def test_update_one_no_op_reports_zero_modified(collection):
 
 def test_update_one_rejects_raw_replacement_document(collection):
     collection.insert_one({"name": "Ada"})
-    with pytest.raises(custom_bson.InvalidUpdateDocument):
+    with pytest.raises(jsondb.InvalidUpdateDocument):
         collection.update_one({"name": "Ada"}, {"age": 99})
 
 
@@ -457,7 +457,7 @@ def test_compact_preserves_index_correctness(collection):
     assert after_full_scan == list(range(15, 20))
     assert after_indexed == [17]
     # the index must still be usable and enforce uniqueness after compact
-    with pytest.raises(custom_bson.DuplicateKeyError):
+    with pytest.raises(jsondb.DuplicateKeyError):
         collection.insert_one({"i": 17})
     # and still be listed under the same name
     assert [ix["name"] for ix in collection.list_indexes()] == ["i_1"]
@@ -465,11 +465,11 @@ def test_compact_preserves_index_correctness(collection):
 
 def test_close_and_reopen_persists_data(tmp_path):
     data_dir = str(tmp_path / "data")
-    client1 = custom_bson.MongoClient(data_dir)
+    client1 = jsondb.JsonDBClient(data_dir)
     client1.testdb.testcoll.insert_one({"name": "Ada"})
     client1.close()
 
-    client2 = custom_bson.MongoClient(data_dir)
+    client2 = jsondb.JsonDBClient(data_dir)
     doc = client2.testdb.testcoll.find_one({"name": "Ada"})
     assert doc is not None and doc["name"] == "Ada"
     client2.close()
@@ -477,7 +477,7 @@ def test_close_and_reopen_persists_data(tmp_path):
 
 def test_dirty_flag_recovery_after_simulated_crash(tmp_path):
     data_dir = tmp_path / "data"
-    client1 = custom_bson.MongoClient(str(data_dir))
+    client1 = jsondb.JsonDBClient(str(data_dir))
     coll1 = client1.testdb.testcoll
     coll1.insert_one({"a": 1})
     coll1.insert_one({"a": 2})
@@ -491,7 +491,7 @@ def test_dirty_flag_recovery_after_simulated_crash(tmp_path):
         f.seek(data_end - 2)
         f.write(b"\xff\xff")
 
-    client2 = custom_bson.MongoClient(str(data_dir))
+    client2 = jsondb.JsonDBClient(str(data_dir))
     docs = list(client2.testdb.testcoll.find({}))
     assert len(docs) == 1
     assert docs[0]["a"] == 1
@@ -512,7 +512,7 @@ def test_insert_many_ordered(collection):
 def test_insert_many_ordered_stops_at_first_error(collection):
     collection.create_index("a", unique=True)
     collection.insert_one({"a": 1})
-    with pytest.raises(custom_bson.DuplicateKeyError):
+    with pytest.raises(jsondb.DuplicateKeyError):
         collection.insert_many([{"a": 2}, {"a": 1}, {"a": 3}], ordered=True)
     # first doc inserted before the failure stays inserted; the one
     # after the failure is never attempted
@@ -523,7 +523,7 @@ def test_insert_many_ordered_stops_at_first_error(collection):
 def test_insert_many_unordered_continues_past_errors(collection):
     collection.create_index("a", unique=True)
     collection.insert_one({"a": 1})
-    with pytest.raises(custom_bson.DuplicateKeyError):
+    with pytest.raises(jsondb.DuplicateKeyError):
         collection.insert_many([{"a": 2}, {"a": 1}, {"a": 3}], ordered=False)
     assert collection.find_one({"a": 2}) is not None
     assert collection.find_one({"a": 3}) is not None
@@ -612,7 +612,7 @@ def test_create_index_on_already_populated_collection(collection):
 
 def test_create_index_on_string_field_raises(collection):
     collection.insert_one({"s": "hello"})
-    with pytest.raises(custom_bson.BSONNotImplementedError):
+    with pytest.raises(jsondb.BSONNotImplementedError):
         collection.create_index("s")
 
 
@@ -620,7 +620,7 @@ def test_create_index_on_string_field_leaves_no_partial_file(collection):
     import os
 
     collection.insert_one({"s": "hello"})
-    with pytest.raises(custom_bson.BSONNotImplementedError):
+    with pytest.raises(jsondb.BSONNotImplementedError):
         collection.create_index("s")
     db_dir = os.path.dirname(collection._file_path)
     leftover = [f for f in os.listdir(db_dir) if f.endswith(".bidx")]
@@ -628,7 +628,7 @@ def test_create_index_on_string_field_leaves_no_partial_file(collection):
 
 
 def test_create_index_compound_keys_rejected(collection):
-    with pytest.raises(custom_bson.BSONNotImplementedError):
+    with pytest.raises(jsondb.BSONNotImplementedError):
         collection.create_index({"a": 1, "b": 1})
 
 
@@ -660,7 +660,7 @@ def test_drop_index_nonexistent_raises(collection):
 def test_unique_index_rejects_duplicate_and_leaves_no_orphan(collection):
     collection.create_index("uid", unique=True)
     collection.insert_one({"uid": 1})
-    with pytest.raises(custom_bson.DuplicateKeyError):
+    with pytest.raises(jsondb.DuplicateKeyError):
         collection.insert_one({"uid": 1})
     assert len(list(collection.find({"uid": 1}))) == 1
 

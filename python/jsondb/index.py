@@ -179,6 +179,7 @@ def create_index(collection: Any, keys: Any, unique: bool) -> str:
         os.remove(path)
         raise
     handle.close()
+    collection._database._client._invalidate_index_listing(collection._database._name, collection._name)
     return index_name
 
 

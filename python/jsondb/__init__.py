@@ -1,8 +1,8 @@
-"""custom_bson: an embedded, file-backed document database with a
+"""jsondb: an embedded, file-backed document database with a
 PyMongo-like local API, built on a native BSON serialization engine.
 
 The BSON codec (``encode``, ``decode``, ``ObjectId``), the mmap-backed
-storage engine (``MongoClient``/``Database``/``Collection``, see
+storage engine (``JsonDBClient``/``Database``/``Collection``, see
 include/custom_bson/storage.h), the full CRUD + query/update-operator
 surface (see query.py), and the persisted B-Tree index (see
 include/custom_bson/btree.h and index.py) are all implemented. Known
@@ -15,7 +15,7 @@ BSON predicate pushdown (see query.py's module docstring).
 Import order matters here: exceptions and object_id are pure Python and
 must be fully importable before _bson_core (the C extension) is
 imported, because _bson_core's module-init routine imports
-custom_bson.object_id and custom_bson.exceptions by name to cache their
+jsondb.object_id and jsondb.exceptions by name to cache their
 classes for exception translation and ObjectId construction.
 _storage_core (imported transitively via client.py) only needs
 exceptions, which is already loaded by then.
@@ -34,7 +34,7 @@ from .exceptions import (
 )
 from .object_id import ObjectId
 from ._bson_core import decode, encode
-from .client import MongoClient
+from .client import JsonDBClient
 from .database import Database
 from .collection import Collection
 from .cursor import Cursor
@@ -46,7 +46,7 @@ __all__ = [
     "encode",
     "decode",
     "ObjectId",
-    "MongoClient",
+    "JsonDBClient",
     "Database",
     "Collection",
     "Cursor",

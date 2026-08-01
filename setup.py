@@ -1,11 +1,11 @@
-"""setuptools glue for the custom_bson native extensions.
+"""setuptools glue for the jsondb native extensions.
 
 Authoritative build path for `pip install -e .` (see pyproject.toml for
 the PEP 517 metadata). Two extension modules are built:
 
-  - custom_bson._bson_core: BSON encode/decode only (bson_engine.c +
+  - jsondb._bson_core: BSON encode/decode only (bson_engine.c +
     _bson_core.c).
-  - custom_bson._storage_core: the collection data file storage engine
+  - jsondb._storage_core: the collection data file storage engine
     (bson_engine.c + platform_mmap.c + storage.c + scanner.c +
     _storage_core.c).
 
@@ -26,7 +26,7 @@ else:
     extra_compile_args = ["-std=c11", "-Wall", "-Wextra"]
 
 bson_core_extension = Extension(
-    "custom_bson._bson_core",
+    "jsondb._bson_core",
     sources=[
         "src/c_engine/bson_engine.c",
         "src/python_bindings/_bson_core.c",
@@ -36,7 +36,7 @@ bson_core_extension = Extension(
 )
 
 storage_core_extension = Extension(
-    "custom_bson._storage_core",
+    "jsondb._storage_core",
     sources=[
         "src/c_engine/bson_engine.c",
         "src/c_engine/platform_mmap.c",

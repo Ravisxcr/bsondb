@@ -1,11 +1,11 @@
-# custom_bson (jsondb)
+﻿# jsondb
 
 An embedded, file-backed document database for Python with a
 [PyMongo](https://pymongo.readthedocs.io/)-like local API
-(`MongoClient`, `Database`, `Collection`, `ObjectId`), built on a
+(`JsonDBClient`, `Database`, `Collection`, `ObjectId`), built on a
 native C BSON serialization engine, an mmap-backed storage engine, and
 a persisted on-disk B-Tree index. There is no network protocol and no
-real `mongod` involved -- `MongoClient` is a local facade over BSON
+real `mongod` involved -- `JsonDBClient` is a local facade over BSON
 documents stored in memory-mapped files on disk.
 
 ## Status
@@ -41,9 +41,9 @@ pip install -e ".[dev]"
 ```
 
 ```python
-import custom_bson
+import jsondb
 
-client = custom_bson.MongoClient("./data")
+client = jsondb.JsonDBClient("./data")
 coll = client.mydb.people
 
 coll.create_index("age")
@@ -72,7 +72,7 @@ ctest --test-dir build --output-on-failure
 include/custom_bson/   Public C headers (BSON engine, mmap abstraction, storage/record format, B-Tree index)
 src/c_engine/           Storage/BSON engine implementation (pure C11, no Python dependency)
 src/python_bindings/    CPython C-API bindings: _bson_core.c (encode/decode), _storage_core.c (storage/index)
-python/custom_bson/     Pure-Python package: ObjectId, exceptions, MongoClient/Database/Collection, query/index/cursor logic
+python/jsondb/          Pure-Python package: ObjectId, exceptions, JsonDBClient/Database/Collection, query/index/cursor logic
 tests/                   C and Python test suites
 docs/                    Wire protocol spec and API reference
 ```

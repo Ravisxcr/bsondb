@@ -58,7 +58,7 @@ tasks:
     cmds:
       - cmake -E rm -rf build
       - cmake -E rm -rf .pytest_cache
-      - cmake -E rm -rf custom_bson.egg-info
+      - cmake -E rm -rf python/jsondb.egg-info
 
   clean-venv:
     desc: Completely remove the virtual environment

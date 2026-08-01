@@ -1,6 +1,6 @@
-# BSON wire protocol (custom_bson subset)
+# BSON wire protocol (jsondb subset)
 
-This document describes the on-wire binary format `custom_bson` reads
+This document describes the on-wire binary format `jsondb` reads
 and writes. It is a subset of the standard [BSON spec](http://bsonspec.org/spec.html);
 the type table below states exactly which parts are implemented.
 
@@ -67,7 +67,7 @@ future `Collection`/query layer, not this serialization layer.
 
 **Deferred type behavior:** encountering a deferred-but-structurally-valid
 type byte anywhere in a document causes the *entire* decode to fail with
-`custom_bson.exceptions.BSONNotImplementedError` -- there is no partial
+`jsondb.exceptions.BSONNotImplementedError` -- there is no partial
 decode. This is distinct from `InvalidBSON`, which means the bytes are
 actually corrupt/malformed, not just a type this version doesn't handle
 yet.

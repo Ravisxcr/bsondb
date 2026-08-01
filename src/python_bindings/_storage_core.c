@@ -646,7 +646,7 @@ PyMODINIT_FUNC PyInit__storage_core(void) {
     PyObject *m = PyModule_Create(&storage_core_module);
     if (!m) return NULL;
 
-    PyObject *exc_mod = PyImport_ImportModule("custom_bson.exceptions");
+    PyObject *exc_mod = PyImport_ImportModule("jsondb.exceptions");
     if (!exc_mod) {
         Py_DECREF(m);
         return NULL;

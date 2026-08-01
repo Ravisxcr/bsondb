@@ -1,6 +1,6 @@
 """Query filter evaluation.
 
-Predicate matching runs on a decoded Python dict (``custom_bson.decode()``
+Predicate matching runs on a decoded Python dict (``jsondb.decode()``
 -> ``matches(doc, filter)``), not as a raw-bytes C evaluator over
 ``bson_iter_t``. See docs/api_reference.md for why: a C-level
 dot-notation + operator + array-broadcast predicate evaluator is a

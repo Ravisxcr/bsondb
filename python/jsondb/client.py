@@ -1,7 +1,7 @@
-"""MongoClient: a local facade over BSON documents stored on disk.
+"""JsonDBClient: a local facade over BSON documents stored on disk.
 
-custom_bson is an embedded, file-backed document database, not a
-network client -- there is no real ``mongod`` involved. MongoClient
+jsondb is an embedded, file-backed document database, not a
+network client -- there is no real ``mongod`` involved. JsonDBClient
 manages a local data directory: one subdirectory per database, one
 ``<collection>.cbd`` memory-mapped file per collection, and any number
 of ``<collection>.<index_name>.bidx`` B-Tree index files alongside it
@@ -21,13 +21,13 @@ not supported in this slice.
 from __future__ import annotations
 
 import os
-from typing import Dict, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 from . import _storage_core
 from .database import Database
 
 
-class MongoClient:
+class JsonDBClient:
     """Entry point for the embedded database, rooted at a local directory."""
 
     def __init__(self, path: Union[str, "os.PathLike[str]"] = "./data") -> None:
@@ -35,6 +35,7 @@ class MongoClient:
         os.makedirs(self._path, exist_ok=True)
         self._handles: Dict[Tuple[str, str], "_storage_core.CollectionHandle"] = {}
         self._index_handles: Dict[Tuple[str, str, str], "_storage_core.IndexHandle"] = {}
+        self._index_listing_cache: Dict[Tuple[str, str], List[str]] = {}
 
     @property
     def path(self) -> str:
@@ -80,35 +81,54 @@ class MongoClient:
             for fname in os.listdir(db_dir):
                 if fname.startswith(prefix) and fname.endswith(".bidx"):
                     os.remove(os.path.join(db_dir, fname))
+        self._invalidate_index_listing(db_name, coll_name)
 
     def _get_index_handles(self, db_name: str, coll_name: str) -> Dict[str, "_storage_core.IndexHandle"]:
         """Returns {index_name: IndexHandle} for every index currently
         on disk for this collection, opening (and caching) any not
-        already open. Re-lists the directory on every call -- a cheap
-        os.listdir(), not a persistent watch -- so a newly created
-        index becomes visible without an explicit cache-invalidation
-        hook."""
+        already open.
+
+        The directory listing itself is cached per (db_name, coll_name)
+        rather than re-scanned on every call -- os.listdir() is cheap in
+        isolation, but this is called twice per document on every
+        indexed write (once to delete the old entry, once to insert the
+        new one), so re-scanning here dominated update-heavy workloads.
+        The cache is invalidated wherever the on-disk index-file set can
+        actually change: create_index, drop_index, _drop_collection."""
         db_dir = os.path.join(self._path, db_name)
         prefix = f"{coll_name}."
+        key = (db_name, coll_name)
+        fnames = self._index_listing_cache.get(key)
+        if fnames is None:
+            fnames = []
+            if os.path.isdir(db_dir):
+                fnames = [
+                    fname for fname in os.listdir(db_dir) if fname.startswith(prefix) and fname.endswith(".bidx")
+                ]
+            self._index_listing_cache[key] = fnames
+
         current: Dict[str, "_storage_core.IndexHandle"] = {}
-        if not os.path.isdir(db_dir):
-            return current
-        for fname in os.listdir(db_dir):
-            if not (fname.startswith(prefix) and fname.endswith(".bidx")):
-                continue
+        for fname in fnames:
             index_name = fname[len(prefix) : -len(".bidx")]
-            key = (db_name, coll_name, index_name)
-            handle = self._index_handles.get(key)
+            handle_key = (db_name, coll_name, index_name)
+            handle = self._index_handles.get(handle_key)
             if handle is None:
                 handle = _storage_core.open_index_file(os.path.join(db_dir, fname))
-                self._index_handles[key] = handle
+                self._index_handles[handle_key] = handle
             current[index_name] = handle
         return current
+
+    def _invalidate_index_listing(self, db_name: str, coll_name: str) -> None:
+        """Drops the cached index-filename listing for one collection,
+        forcing the next _get_index_handles() call to re-scan the
+        directory."""
+        self._index_listing_cache.pop((db_name, coll_name), None)
 
     def _invalidate_index_handle(self, db_name: str, coll_name: str, index_name: str) -> None:
         handle = self._index_handles.pop((db_name, coll_name, index_name), None)
         if handle is not None:
             handle.close()
+        self._invalidate_index_listing(db_name, coll_name)
 
     def __getattr__(self, name: str) -> Database:
         if name.startswith("_"):
@@ -128,4 +148,4 @@ class MongoClient:
         self._index_handles.clear()
 
     def __repr__(self) -> str:
-        return f"MongoClient({self._path!r})"
+        return f"JsonDBClient({self._path!r})"
