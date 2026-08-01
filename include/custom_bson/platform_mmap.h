@@ -1,13 +1,6 @@
 /*
  * platform_mmap.h -- cross-platform memory-mapped file abstraction.
  *
- * SLICE STATUS: this header's interface is final/real. The
- * implementation in src/c_engine/platform_mmap.c is a STUB this slice
- * (every function returns BSON_ERR_NOT_IMPLEMENTED) -- it exists so
- * the storage-engine slice can implement against a stable API without
- * a redesign, and so scanner.c/tests/c_tests/test_mmap.c have a real
- * header to compile against today.
- *
  * Design: a single opaque bson_mmap_file_t abstracts POSIX mmap(2)/
  * munmap(2) and Win32 CreateFileMappingW/MapViewOfFile/UnmapViewOfFile
  * behind one API. Callers never see platform-specific handles.
