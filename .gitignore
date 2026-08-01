@@ -69,6 +69,7 @@ venv/
 cmake-build*/
 CMakeFiles/
 CMakeCache.txt
+wheelhouse/
 
 # Claude Code local notes (personal/local, not shared)
 CLAUDE.local.md

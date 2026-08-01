@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = ["setuptools>=77", "packaging>=24.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -19,6 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: C",
     "Operating System :: OS Independent",
     "Topic :: Database",
@@ -32,7 +33,7 @@ Issues = "https://github.com/Ravisxcr/bsondb/issues"
 Documentation = "https://github.com/Ravisxcr/bsondb/tree/main/docs"
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "cibuildwheel>=4.1"]
 
 [tool.setuptools]
 package-dir = { "" = "python" }
@@ -42,7 +43,7 @@ packages = ["bsondb"]
 bsondb = ["py.typed", "*.pyi"]
 
 [tool.cibuildwheel]
-build = "cp310-* cp311-* cp312-* cp313-*"
+build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
 skip = "*-musllinux* *-win32 *_i686"
-test-command = "python -m pytest {project}/tests/python_tests -q"
+test-command = "python -m pytest \"{project}/tests/python_tests\" -q"
 test-requires = "pytest"

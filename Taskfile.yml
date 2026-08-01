@@ -53,6 +53,15 @@ tasks:
     desc: Run all tests (Python and C)
     deps: [test-py, test-c]
 
+  build-wheels:
+    desc: Build and test wheels for every target Python version (cp310-cp313), mirroring the release CI matrix
+    deps: [install]
+    cmds:
+      - cmd: '{{.VENV_DIR}}/Scripts/python -m cibuildwheel --platform windows'
+        platforms: [windows]
+      - cmd: '{{.VENV_DIR}}/bin/python -m cibuildwheel --platform linux'
+        platforms: [linux, darwin]
+
   clean:
     desc: Clean up build artifacts (does not delete .venv)
     cmds:
