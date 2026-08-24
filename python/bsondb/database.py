@@ -8,6 +8,7 @@ first collection access, not here.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from .collection import Collection
@@ -23,6 +24,9 @@ class Database:
     @property
     def name(self) -> str:
         return self._name
+
+    def list_collection_names(self) -> list[str]:
+        return self._client._list_collection_names(self._name)
 
     def __getattr__(self, name: str) -> Collection:
         if name.startswith("_"):

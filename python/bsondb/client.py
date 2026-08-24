@@ -138,6 +138,20 @@ class BsonDBClient:
     def __getitem__(self, name: str) -> Database:
         return Database(self, name)
 
+    def _list_collection_names(self, db_name) -> list[str]:
+        return [
+            collection_name.removesuffix(".cbd")
+            for collection_name in os.listdir(os.path.join(self._path, db_name))
+            if collection_name.endswith(".cbd")
+        ]
+
+    def list_database_names(self) -> list[str]:
+        return [
+            name
+            for name in os.listdir(self._path)
+            if os.path.isdir(os.path.join(self._path, name))
+        ]
+
     def close(self) -> None:
         """Flushes and closes every open collection and index file handle."""
         for handle in self._handles.values():
