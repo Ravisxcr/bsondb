@@ -14,7 +14,7 @@ import struct
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from . import _storage_core
-from .exceptions import BSONNotImplementedError, InvalidDocument
+from .exceptions import BSONNotImplementedError, InvalidDocument, OperationFailure
 from .object_id import ObjectId
 
 BTREE_KEY_SIZE = 13
@@ -179,7 +179,7 @@ def create_index(
             
         if same_spec:
             return index_name
-        raise InvalidDocument(f"index '{index_name}' already exists with a different specification")
+        raise OperationFailure(f"index '{index_name}' already exists with a different specification")
 
     key_type_tag = TAG_NULL
     for _offset, doc in collection._iter_matches({}):
@@ -217,7 +217,7 @@ def drop_index(collection: Any, index_or_name: Any) -> None:
     client._invalidate_index_handle(collection._database._name, collection._name, index_name)
 
     if not os.path.exists(path):
-        raise InvalidDocument(f"index '{index_or_name}' does not exist")
+        raise OperationFailure(f"index '{index_or_name}' does not exist")
 
     os.remove(path)
     client._invalidate_index_listing(collection._database._name, collection._name)

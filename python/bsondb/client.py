@@ -21,6 +21,7 @@ not supported in this slice.
 from __future__ import annotations
 
 import os
+import shutil
 from typing import Dict, List, Tuple, Union
 
 from . import _storage_core
@@ -144,6 +145,20 @@ class BsonDBClient:
             for collection_name in os.listdir(os.path.join(self._path, db_name))
             if collection_name.endswith(".cbd")
         ]
+
+    def drop_database(self, name_or_database: Union[str, Database]) -> None:
+        name = name_or_database
+        if isinstance(name, Database):
+            name = name._name
+
+        if not isinstance(name, str):
+            raise TypeError(
+                f"name_or_database must be an instance of str or a Database, not {type(name)}"
+            )
+
+        db_path = os.path.join(self._path, name)
+        if os.path.isdir(db_path):
+            shutil.rmtree(db_path)
 
     def list_database_names(self) -> list[str]:
         return [

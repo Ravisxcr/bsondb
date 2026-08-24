@@ -35,3 +35,7 @@ class InvalidUpdateDocument(BSONError):
 
 class DuplicateKeyError(BSONError):
     """Raised when an insert or update would violate a unique index."""
+
+class OperationFailure(Exception):
+    """Raised when a database operation fails (e.g. index not found)."""
+    pass
