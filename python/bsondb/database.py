@@ -9,7 +9,7 @@ first collection access, not here.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Union
 
 from .collection import Collection
 
@@ -27,6 +27,17 @@ class Database:
 
     def list_collection_names(self) -> list[str]:
         return self._client._list_collection_names(self._name)
+
+    def drop_collection(self, name_or_collection: Union[str, Collection]) -> None:
+        name = name_or_collection
+        if isinstance(name, Collection):
+            name = name._name
+
+        if not isinstance(name, str):
+            raise TypeError(f"name_or_collection must be an instance of str, not {type(name)}")
+
+        self._client._drop_collection(self._name, name, Collection(self._name, name)._file_path())
+
 
     def __getattr__(self, name: str) -> Collection:
         if name.startswith("_"):
