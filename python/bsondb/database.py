@@ -8,7 +8,8 @@ first collection access, not here.
 
 from __future__ import annotations
 
-from typing import Any
+import os
+from typing import Any, Union
 
 from .collection import Collection
 
@@ -23,6 +24,22 @@ class Database:
     @property
     def name(self) -> str:
         return self._name
+
+    def list_collection_names(self) -> list[str]:
+        return self._client._list_collection_names(self._name)
+
+    def drop_collection(self, name_or_collection: Union[str, Collection]) -> None:
+        if isinstance(name_or_collection, Collection):
+            coll = name_or_collection
+        elif isinstance(name_or_collection, str):
+            coll = self[name_or_collection]
+        else:
+            raise TypeError(
+                f"name_or_collection must be an instance of str or Collection, not {type(name_or_collection).__name__}"
+            )
+
+        coll.drop()
+
 
     def __getattr__(self, name: str) -> Collection:
         if name.startswith("_"):

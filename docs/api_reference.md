@@ -23,6 +23,7 @@ For the underlying wire/file formats, see
   - [5.1 Construction & lifecycle](#51-construction--lifecycle)
   - [5.2 Insert](#52-insert)
   - [5.3 Query](#53-query)
+    - [5.3.1 Cursor](#531-cursor)
   - [5.4 Query filter reference](#54-query-filter-reference)
   - [5.5 Update & replace](#55-update--replace)
   - [5.6 Find-and-modify](#56-find-and-modify)
@@ -40,12 +41,17 @@ For the underlying wire/file formats, see
 | [`bsondb.decode(data)`](#12-bsondbdecodedata-bytes---dict) | Codec | BSON `bytes` → `dict` |
 | [`bsondb.ObjectId`](#21-bsondbobjectid) | Core type | 12-byte unique document id |
 | [`bsondb.BsonDBClient(path)`](#51-construction--lifecycle) | Client | Opens/creates a local data directory |
-| [`client.<db_name>`](#51-construction--lifecycle) | Client | Attribute access → `Database` |
-| [`db.<collection_name>`](#51-construction--lifecycle) | Database | Attribute access → `Collection` |
+| [`client.<db_name>` / `client[<db_name>]`](#51-construction--lifecycle) | Client | Access a `Database` |
+| [`db.<collection_name>` / `db[<collection_name>]`](#51-construction--lifecycle) | Database | Access a `Collection` |
+| [`client.list_database_names()`](#51-construction--lifecycle) | Client | List database directories |
+| [`client.drop_database(name)`](#51-construction--lifecycle) | Client | Delete a database and its files |
+| [`db.list_collection_names()`](#51-construction--lifecycle) | Database | List collection data files |
+| [`db.drop_collection(name)`](#51-construction--lifecycle) | Database | Delete one collection and its indexes |
 | [`coll.insert_one(doc)`](#52-insert) | Collection | Insert a single document |
 | [`coll.insert_many(docs)`](#52-insert) | Collection | Insert multiple documents |
 | [`coll.find(filter)`](#53-query) | Collection | Lazy `Cursor` over matching documents |
 | [`coll.find_one(filter)`](#53-query) | Collection | First matching document, or `None` |
+| [`Cursor.sort()` / `skip()` / `limit()`](#531-cursor) | Cursor | Configure and consume query results |
 | [`coll.update_one(filter, update)`](#55-update--replace) | Collection | Update the first match |
 | [`coll.update_many(filter, update)`](#55-update--replace) | Collection | Update every match |
 | [`coll.replace_one(filter, replacement)`](#55-update--replace) | Collection | Replace the first match wholesale |
@@ -64,7 +70,7 @@ For the underlying wire/file formats, see
 | [`coll.compact()`](#510-maintenance) | Collection | Reclaim tombstoned space |
 | [`InsertOneResult` / `InsertManyResult` / `UpdateResult` / `DeleteResult`](#511-result-types) | Result types | Return values of the above |
 | [`BSONError` hierarchy](#31-codec-exceptions) | Exceptions | Codec-level failures |
-| [`InvalidUpdateDocument`, `DuplicateKeyError`](#32-collection-exceptions) | Exceptions | Collection-level failures |
+| [`InvalidUpdateDocument`, `DuplicateKeyError`, `OperationFailure`](#32-collection-exceptions) | Exceptions | Collection-level failures |
 
 ## 1. Module-level codec functions
 
@@ -157,12 +163,15 @@ BSONError
 ├── ...(codec exceptions above)
 ├── InvalidUpdateDocument   # update document isn't built from $set/$unset/$inc
 └── DuplicateKeyError        # unique index violation
+
+OperationFailure             # a collection operation cannot be completed
 ```
 
 | Exception | Raised by |
 | --- | --- |
 | `InvalidUpdateDocument` | [`update_one`/`update_many`/`find_one_and_update`](#55-update--replace) when the update document isn't built entirely from `$set`/`$unset`/`$inc` |
 | `DuplicateKeyError` | any write through a `unique=True` index (see [§5.9](#59-indexing)) |
+| `bsondb.exceptions.OperationFailure` | `drop_index` when the index does not exist, or `create_index` when its requested name already has a different specification |
 
 ## 4. Python ↔ BSON type mapping
 
@@ -185,16 +194,21 @@ BSONError
 
 ```python
 client = bsondb.BsonDBClient("./data")   # local data directory, not a network connection; creates it if missing
-db = client.mydb                          # -> Database (a subdirectory of client.path)
-coll = db.mycollection                    # -> Collection (one <name>.cbd mmap'd data file)
+db = client.mydb                          # -> Database (also: client["mydb"])
+coll = db.mycollection                    # -> Collection (also: db["mycollection"])
 ```
 
 | Call | Returns | Notes |
 | --- | --- | --- |
 | `BsonDBClient(path)` | `BsonDBClient` | Creates `path` eagerly — there's no server to defer that to in an embedded model |
-| `client.<db_name>` | `Database` | Attribute access, lazily creates a subdirectory |
-| `db.<collection_name>` | `Collection` | Attribute access, lazily creates the `.cbd` data file |
+| `client.<db_name>` / `client[name]` | `Database` | Returns a lightweight database handle; its directory is created on first collection I/O |
+| `db.<collection_name>` / `db[name]` | `Collection` | Returns a lightweight collection handle; its `.cbd` file is created on first I/O |
+| `client.list_database_names()` | `list[str]` | Names of subdirectories under `client.path` |
+| `client.drop_database(name_or_database)` | `None` | Deletes a database directory; accepts its name or a `Database` handle |
+| `db.list_collection_names()` | `list[str]` | Names of this database's `.cbd` files |
+| `db.drop_collection(name_or_collection)` | `None` | Deletes a collection's data and index files; accepts its name or a `Collection` handle |
 | `client.close()` | `None` | Flushes and closes every open collection and index file handle |
+| `with BsonDBClient(path) as client` | `BsonDBClient` | Closes the client when the context exits |
 
 > No multi-process locking: this is a single-process embedded
 > database, like SQLite's default (non-WAL) mode conceptually —
@@ -217,13 +231,35 @@ coll.insert_many([{"a": 1}, {"a": 2}], ordered=True)
 
 | Method | Signature | Returns |
 | --- | --- | --- |
-| `find_one` | `coll.find_one(filter: dict = {})` | `dict \| None` |
-| `find` | `coll.find(filter: dict = {}, projection: dict = None, skip: int = 0, limit: int = 0)` | `Cursor` (lazy, iterable) |
+| `find_one` | `coll.find_one(filter: dict = None, projection: dict \| list[str] = None)` | `dict \| None` |
+| `find` | `coll.find(filter: dict = None, projection: dict \| list[str] = None, skip: int = 0, limit: int = 0)` | `Cursor` (lazy, iterable) |
 
 ```python
 coll.find_one({"name": "Ada"})
 list(coll.find({"age": {"$gte": 18}}, projection={"name": 1}, skip=0, limit=10))
 ```
+
+### 5.3.1 Cursor
+
+`find()` returns a lazy, single-pass `Cursor`. Configure it before
+iteration; configuration methods return the same cursor to allow
+chaining.
+
+| Method / member | Signature | Notes |
+| --- | --- | --- |
+| `skip` | `cursor.skip(count: int)` | Skip `count` documents; `count` must be non-negative |
+| `limit` | `cursor.limit(count: int)` | Yield at most `count` documents; `0` means unlimited |
+| `sort` | `cursor.sort(field, direction=1)` | Sorts in memory; accepts a field name, a mapping, or a sequence of `(field, direction)` pairs. A negative direction sorts descending. |
+| `projection` | `cursor.projection(spec)` | Replaces the projection; accepts an inclusion/exclusion mapping or a sequence of field names |
+| `rewind` | `cursor.rewind()` | Reset the cursor so it can be iterated again |
+| `clone` | `cursor.clone()` | Return a fresh cursor with the same settings |
+| `to_list` | `cursor.to_list(length=None)` | Materialize remaining results, optionally capped at `length` |
+| `alive` | `cursor.alive` | `True` until the cursor is exhausted |
+| indexing | `cursor[index]` / `cursor[start:stop]` | Reads from a fresh clone; negative indexes are not supported |
+
+Calling `skip`, `limit`, `sort`, or `projection` after iteration has
+begun raises `RuntimeError`. Sorting materializes the matching documents
+before applying skip and limit.
 
 A B-Tree index (see [§5.9](#59-indexing)) narrows candidates for
 eligible filters; the full filter is always re-evaluated against every
@@ -308,9 +344,9 @@ coll.delete_many({"tag": "x"})
 
 | Method | Signature | Notes |
 | --- | --- | --- |
-| `count_documents` | `coll.count_documents(filter: dict = {})` | Exact; scans (or index-narrows) matches |
+| `count_documents` | `coll.count_documents(filter: dict = None)` | Exact; scans (or index-narrows) matches |
 | `estimated_document_count` | `coll.estimated_document_count()` | O(1): the storage header's live-record counter |
-| `distinct` | `coll.distinct(field: str)` | Unique values; an array field contributes its elements |
+| `distinct` | `coll.distinct(field: str, filter: dict = None)` | Unique values among matches; an array field contributes its elements |
 
 ```python
 coll.count_documents({"tag": "x"})
@@ -332,6 +368,12 @@ coll.create_index({"age": -1}, unique=True)  # -> "age_-1"
 coll.list_indexes()                          # -> [{"name": "age_1", "key": {"age": 1}, "unique": False}, ...]
 coll.drop_index("age_1")
 ```
+
+`drop_index()` also accepts a bare field name (for example,
+`coll.drop_index("age")`) and resolves it to that field's ascending or
+descending generated index name. Attempting to drop a missing index, or
+creating an existing generated index name with a different specification,
+raises `bsondb.exceptions.OperationFailure`.
 
 Backed by a persisted on-disk B+Tree per index — see
 [`docs/wire_protocol.md`](wire_protocol.md#b-tree-index-file-format-custom)

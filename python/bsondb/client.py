@@ -21,6 +21,7 @@ not supported in this slice.
 from __future__ import annotations
 
 import os
+import shutil
 from typing import Dict, List, Tuple, Union
 
 from . import _storage_core
@@ -36,6 +37,23 @@ class BsonDBClient:
         self._handles: Dict[Tuple[str, str], "_storage_core.CollectionHandle"] = {}
         self._index_handles: Dict[Tuple[str, str, str], "_storage_core.IndexHandle"] = {}
         self._index_listing_cache: Dict[Tuple[str, str], List[str]] = {}
+
+    def __getitem__(self, name: str) -> Database:
+        return Database(self, name)
+
+    def __getattr__(self, name: str) -> Database:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return self[name]
+
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def __repr__(self) -> str:
+        return f"BsonDBClient({self._path!r})"
 
     @property
     def path(self) -> str:
@@ -130,13 +148,34 @@ class BsonDBClient:
             handle.close()
         self._invalidate_index_listing(db_name, coll_name)
 
-    def __getattr__(self, name: str) -> Database:
-        if name.startswith("_"):
-            raise AttributeError(name)
-        return self[name]
 
-    def __getitem__(self, name: str) -> Database:
-        return Database(self, name)
+    def _list_collection_names(self, db_name) -> list[str]:
+        return [
+            collection_name.removesuffix(".cbd")
+            for collection_name in os.listdir(os.path.join(self._path, db_name))
+            if collection_name.endswith(".cbd")
+        ]
+
+    def drop_database(self, name_or_database: Union[str, Database]) -> None:
+        name = name_or_database
+        if isinstance(name, Database):
+            name = name._name
+
+        if not isinstance(name, str):
+            raise TypeError(
+                f"name_or_database must be an instance of str or a Database, not {type(name)}"
+            )
+
+        db_path = os.path.join(self._path, name)
+        if os.path.isdir(db_path):
+            shutil.rmtree(db_path)
+
+    def list_database_names(self) -> list[str]:
+        return [
+            name
+            for name in os.listdir(self._path)
+            if os.path.isdir(os.path.join(self._path, name))
+        ]
 
     def close(self) -> None:
         """Flushes and closes every open collection and index file handle."""
@@ -147,5 +186,3 @@ class BsonDBClient:
             handle.close()
         self._index_handles.clear()
 
-    def __repr__(self) -> str:
-        return f"BsonDBClient({self._path!r})"
