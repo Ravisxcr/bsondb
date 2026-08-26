@@ -16,7 +16,7 @@ import pytest
 
 import bsondb
 from bsondb import InsertOneResult, ObjectId
-from bsondb.exceptions import InvalidDocument
+from bsondb.exceptions import InvalidDocument, OperationFailure
 
 
 @pytest.fixture()
@@ -599,7 +599,7 @@ def test_create_index_is_idempotent_for_identical_spec(collection):
 
 def test_create_index_conflicting_spec_raises(collection):
     collection.create_index("age", unique=False)
-    with pytest.raises(InvalidDocument):
+    with pytest.raises(OperationFailure):
         collection.create_index("age", unique=True)
 
 
@@ -653,7 +653,7 @@ def test_drop_index_removes_it(collection):
 
 
 def test_drop_index_nonexistent_raises(collection):
-    with pytest.raises(InvalidDocument):
+    with pytest.raises(OperationFailure):
         collection.drop_index("nope_1")
 
 
