@@ -38,6 +38,23 @@ class BsonDBClient:
         self._index_handles: Dict[Tuple[str, str, str], "_storage_core.IndexHandle"] = {}
         self._index_listing_cache: Dict[Tuple[str, str], List[str]] = {}
 
+    def __getitem__(self, name: str) -> Database:
+        return Database(self, name)
+
+    def __getattr__(self, name: str) -> Database:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return self[name]
+
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def __repr__(self) -> str:
+        return f"BsonDBClient({self._path!r})"
+
     @property
     def path(self) -> str:
         return self._path
@@ -131,13 +148,6 @@ class BsonDBClient:
             handle.close()
         self._invalidate_index_listing(db_name, coll_name)
 
-    def __getattr__(self, name: str) -> Database:
-        if name.startswith("_"):
-            raise AttributeError(name)
-        return self[name]
-
-    def __getitem__(self, name: str) -> Database:
-        return Database(self, name)
 
     def _list_collection_names(self, db_name) -> list[str]:
         return [
@@ -176,5 +186,3 @@ class BsonDBClient:
             handle.close()
         self._index_handles.clear()
 
-    def __repr__(self) -> str:
-        return f"BsonDBClient({self._path!r})"
