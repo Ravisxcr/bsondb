@@ -29,14 +29,16 @@ class Database:
         return self._client._list_collection_names(self._name)
 
     def drop_collection(self, name_or_collection: Union[str, Collection]) -> None:
-        name = name_or_collection
-        if isinstance(name, Collection):
-            name = name._name
+        if isinstance(name_or_collection, Collection):
+            coll = name_or_collection
+        elif isinstance(name_or_collection, str):
+            coll = self[name_or_collection]
+        else:
+            raise TypeError(
+                f"name_or_collection must be an instance of str or Collection, not {type(name_or_collection).__name__}"
+            )
 
-        if not isinstance(name, str):
-            raise TypeError(f"name_or_collection must be an instance of str, not {type(name)}")
-
-        self._client._drop_collection(self._name, name, Collection(self._name, name)._file_path())
+        coll.drop()
 
 
     def __getattr__(self, name: str) -> Collection:
